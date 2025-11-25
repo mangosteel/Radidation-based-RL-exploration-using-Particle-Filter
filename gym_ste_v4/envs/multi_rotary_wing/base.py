@@ -509,17 +509,25 @@ class BaseEnv(gym.Env):
         #     p2 = (gx + circle_radius * math.cos(end_angle), gy + circle_radius * math.sin(end_angle))
         #     obstacles.append((p1, p2, wall_thickness))
         # 근원지를 완전히 둘러싸는 원형 장애물 생성 (구멍 없음)
+
         circle_radius = surround_size / 2
         num_segments = 24  # 원 둘레를 구성할 세그먼트 수 (15도 간격)
-        angle_step = 2 * math.pi / num_segments
-
+        #angle_step = 2 * math.pi / num_segments
+        circle_points = [
+            (gx + circle_radius * math.cos(angle),
+             gy + circle_radius * math.sin(angle))
+            for angle in np.linspace(0, 2 * math.pi, num_segments, endpoint=False)
+        ]
         for i in range(num_segments):
-            angle1 = i * angle_step
-            angle2 = (i + 1) * angle_step
-            p1 = (gx + circle_radius * math.cos(angle1),
-                  gy + circle_radius * math.sin(angle1))
-            p2 = (gx + circle_radius * math.cos(angle2),
-                  gy + circle_radius * math.sin(angle2))
+            # angle1 = i * angle_step
+            # angle2 = (i + 1) * angle_step
+            # p1 = (gx + circle_radius * math.cos(angle1),
+            #       gy + circle_radius * math.sin(angle1))
+            # p2 = (gx + circle_radius * math.cos(angle2),
+            #       gy + circle_radius * math.sin(angle2))
+            p1 = circle_points[i]
+            p2 = circle_points[(i + 1) % num_segments]
+            obstacles.append((p1, p2, wall_thickness))
             obstacles.append((p1, p2, wall_thickness))
 
 

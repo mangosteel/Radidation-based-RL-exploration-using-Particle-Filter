@@ -35,7 +35,34 @@ def segment_intersection(p1, p2, q1, q2):
         return (p1[0] + t * r[0], p1[1] + t * r[1]), t
     return None
 
+def _detect_circular_barrier(obstacles, source_x, source_y, radius_tolerance_ratio=0.02):
+    """Detect a near-circular obstacle ring around the source.
 
+    Returns (radius, thickness) if all obstacle endpoints lie close to a common
+    radius from the source and carry an explicit thickness. Otherwise returns
+    None.
+    """
+    if not obstacles:
+        return None
+
+    radii = []
+    thicknesses = []
+
+    for obs in obstacles:
+        if len(obs) < 3:
+            return None
+        (x1, y1), (x2, y2), thickness = obs
+        radii.append(math.hypot(x1 - source_x, y1 - source_y))
+        radii.append(math.hypot(x2 - source_x, y2 - source_y))
+        thicknesses.append(thickness)
+
+    radius_mean = sum(radii) / len(radii)
+    tolerance = max(radius_mean * radius_tolerance_ratio, 1e-3)
+    if any(abs(r - radius_mean) > tolerance for r in radii):
+        return None
+
+    thickness_mean = sum(thicknesses) / len(thicknesses)
+    return radius_mean, thickness_mean
 
 
 def radiation_field(x, y, radiation, obstacles=None,visual=True): # 이것을 시각화용 실제 값 전용 두가지 버전을 만들어야 할듯..
@@ -67,7 +94,17 @@ def radiation_field(x, y, radiation, obstacles=None,visual=True): # 이것을 �
     # 2) 장애물 감쇠 ∏ e^(–μ · d_t)
     if obstacles:
         attenuation = 1.0
-        for obs in obstacles:
+        # for obs in obstacles:
+        # 원형 장애물이 존재하면 방향에 무관한 균일 감쇠만 적용
+        circular_barrier = _detect_circular_barrier(obstacles, radiation.S_x, radiation.S_y)
+        non_circular_obstacles = [] if circular_barrier else obstacles
+
+        if circular_barrier:
+            barrier_radius, barrier_thickness = circular_barrier
+            if r > barrier_radius:
+                attenuation *= math.exp(-mu * barrier_thickness)
+
+        for obs in non_circular_obstacles:
             # obs 가 2-tuple 이면 thickness=1m, 3-tuple 이면 내부 값 사용
             if len(obs) == 2:
                 (x1, y1), (x2, y2) = obs
