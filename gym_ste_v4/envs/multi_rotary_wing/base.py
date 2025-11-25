@@ -60,6 +60,7 @@ class BaseEnv(gym.Env):
         self.block_on = False
         self.step_size = self.agent_v * self.delta_t # 한번 이동할때 거리...
         self.crash_range = self.step_size / 2   
+        self.motion_noise_std = 0.1
 
         self.success_reward        = +100  # 근원지 찾았을때(거리가 거의0에 가까울때...)
         self.crash_warning_penalty = +0 #-0.1
@@ -216,7 +217,7 @@ class BaseEnv(gym.Env):
         self.radiation       = Radiation()  #  가스객체. >> 방사선 객체로 바꾸면 댐!
         self.radiation.S_x   = self.court_lx/2  # 초기위치는 전체영역의 절반에 위치..
         self.radiation.S_y   = self.court_lx/2
-        self.radiation.S_mass = 9.47 * 10**(-6) * 0.7
+        self.radiation.S_mass = 9.47 * 10**(-6) * 0.7 # 아마도 1m기준으로 10mSV/h 인가 아마도?
 
 
     
@@ -310,9 +311,9 @@ class BaseEnv(gym.Env):
 
         converge_done = min_conv < self.conv_eps # 임계치보다 작다면.. done이 true가 되겠지.. 
 
-        if self.block_on:
-            self.crash = 100
-            rews[group == group[min_conv_indx]] = - self.crash
+        # if self.block_on:
+        #     self.crash = 100
+        #     rews[group == group[min_conv_indx]] = - self.crash
         
         if min_conv < self.conv_eps: # 이것이 실행된다는 건 일단 true인 상태...
             pf_center = self.uav[min_conv_indx].pf_center # 어차피 에이전트 1개면 argmin이 의미없긴함..
@@ -345,12 +346,12 @@ class BaseEnv(gym.Env):
         if not converge_done:
             self.nearby = None  # 그래서 수렴할때와 발산할 때의 nearby가 같구나... 애초에 거리조건만 만족안시키는 경우라서 거리가 계산된거 구나?
 
-        info = [converge_done, crash_done, self.block_on, timeout_done]
+        info = [converge_done, crash_done, timeout_done]
     
 
         # There are three dones: Converge done, crash_done, timeout_done
         # print("CONV", converge_done, "CRASH", crash_done, "TIMEOUT", timeout_done)
-        done = any([converge_done, crash_done, self.block_on,timeout_done])
+        done = any([converge_done, crash_done,timeout_done])
         self.uav[0].last_x , self.uav[0].last_y = self.uav[0].x , self.uav[0].y
         return [global_obs, comm_obs], rews, done, info # 아마 에이전트를 설정할때, 파티클정보야 원래 균일분포로 초기화되는건데...
                                                         # 바람정보나 센서측정값을 기반으로 관측 데이터가 달라질듯?(wegiht_update, gmm 클러스터링...) 
@@ -358,7 +359,7 @@ class BaseEnv(gym.Env):
     def reset(self): # 그럼 리셋을 먼저 한다는  가정하에 uav가 미리 정의되고 init_env에서 self.uav를 사용할수 있는듯? 어차피 호출먼저 되는 장떙이니...
         print("Reset")
         self.count_actions = 0
-        self.block_on = False
+        # self.block_on = False
 
         # set initial state randomly
         self._set_init_state() # 아 그러면 env.step시 extreme에서 정의한 최종 환경객체의 set_init_state()가 여기서 발동되는거네...!
@@ -470,7 +471,7 @@ class BaseEnv(gym.Env):
                             wall_length_range=(5, 10),
                             wall_thickness=0.04,
                             min_clearance=0.5,
-                            surround_size=10.0):
+                            surround_size=5.0):
     # """
     # 랜덤한 미로형 장애물 (벽) 생성
     #   - num_walls: 생성할 벽 개수
@@ -486,154 +487,41 @@ class BaseEnv(gym.Env):
         gx, gy = self.radiation.S_x, self.radiation.S_y
         ax, ay = agent_start
 
-        # 1) goal 주변 4방향 벽 배치, 한 방향만 랜덤으로 뚫기
+       
+        # source 기준으로 원형으로 둘러싼 장애물..
 
-        # directions = ['left','right','top','bottom']
-        # open_side = self.np_random.choice(directions)
-        # # wall length equals court dimensions to fully block
-        # half = surround_size / 2
-        # for side in directions:
-        #     if side == open_side:
-        #         continue  # 이 면만 구멍..
-        #     if side == 'left':
-        #         p1 = (gx - half, gy - half)
-        #         p2 = (gx - half, gy + half)
-        #     elif side == 'right':
-        #         p1 = (gx + half, gy - half)
-        #         p2 = (gx + half, gy + half)
-        #     elif side == 'bottom':
-        #         p1 = (gx - half, gy - half)
-        #         p2 = (gx + half, gy - half)
-        #     elif side == 'top':
-        #         p1 = (gx - half, gy + half)
-        #         p2 = (gx + half, gy + half)
-        #     obstacles.append((p1, p2, wall_thickness))
+        # circle_radius = surround_size / 2
+        # gap_angle = self.np_random.uniform(0, 2 * math.pi)
+        # gap_width = math.pi / 3
+        # num_segments = 24
+        # angle_step = 2 * math.pi / num_segments
 
+        # for i in range(num_segments):
+        #     start_angle = i * angle_step
+        #     end_angle = (i + 1) * angle_step
+        #     mid_angle = (start_angle + end_angle) / 2
 
-        directions = ['left','right','top','bottom']
-        open_side = self.np_random.choice(directions)
-        half = surround_size / 2
-        gap = surround_size / 3  # 구멍 크기 (ex. 전체 10이면 3.3m쯤 뚫음)
-
-        for side in directions:
-            if side == 'left':
-                if open_side == 'left':
-                    # 위쪽 절반
-                    p1 = (gx - half, gy + gap/2)
-                    p2 = (gx - half, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-                    # 아래쪽 절반
-                    p1 = (gx - half, gy - half)
-                    p2 = (gx - half, gy - gap/2)
-                    obstacles.append((p1, p2, wall_thickness))
-                else:
-                    p1 = (gx - half, gy - half)
-                    p2 = (gx - half, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-
-            elif side == 'right':
-                if open_side == 'right':
-                    p1 = (gx + half, gy + gap/2)
-                    p2 = (gx + half, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-                    p1 = (gx + half, gy - half)
-                    p2 = (gx + half, gy - gap/2)
-                    obstacles.append((p1, p2, wall_thickness))
-                else:
-                    p1 = (gx + half, gy - half)
-                    p2 = (gx + half, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-
-            elif side == 'bottom':
-                if open_side == 'bottom':
-                    p1 = (gx - half, gy - half)
-                    p2 = (gx - gap/2, gy - half)
-                    obstacles.append((p1, p2, wall_thickness))
-                    p1 = (gx + gap/2, gy - half)
-                    p2 = (gx + half, gy - half)
-                    obstacles.append((p1, p2, wall_thickness))
-                else:
-                    p1 = (gx - half, gy - half)
-                    p2 = (gx + half, gy - half)
-                    obstacles.append((p1, p2, wall_thickness))
-
-            elif side == 'top':
-                if open_side == 'top':
-                    p1 = (gx - half, gy + half)
-                    p2 = (gx - gap/2, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-                    p1 = (gx + gap/2, gy + half)
-                    p2 = (gx + half, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-                else:
-                    p1 = (gx - half, gy + half)
-                    p2 = (gx + half, gy + half)
-                    obstacles.append((p1, p2, wall_thickness))
-
-        
-
-        # while len(obstacles) < num_walls and attempts < max_attempts:
-        #     attempts += 1
-
-        #     # 1) 길이·방향·위치 뽑기 (기존 코드 그대로)
-        #     length = self.np_random.uniform(*wall_length_range)
-        #     is_vertical = (self.np_random.rand() < 0.5)
-
-        #     if is_vertical:
-        #         x = self.np_random.uniform(0, self.court_lx-2.5)
-        #         y = self.np_random.uniform(0, self.court_ly-2.5 - length)
-        #         p1 = (x, y);           p2 = (x, y + length)
-
-        #         # goal(근원지) 근처엔 벽 생성 금지 (±2m)
-        #         if abs(self.radiation.S_x - x) < 2.0:
-        #             continue
-        #     else:
-        #         x = self.np_random.uniform(0, self.court_lx-2.5 - length)
-        #         y = self.np_random.uniform(0, self.court_ly-2.5)
-        #         p1 = (x, y);           p2 = (x + length, y)
-
-        #         if abs(self.radiation.S_y - y) < 2.0:
-        #             continue
-
-        #     # 2) 기존 장애물들과 교차(intersect) 여부 체크
-        #     skip = False
-        #     for (q1, q2, _) in obstacles:
-        #         # 만약 두 선분이 교차하거나, 너무 가까이 평행이동 된 경우
-        #         if line_intersects(p1[0], p1[1], p2[0], p2[1],
-        #                         q1[0], q1[1], q2[0], q2[1]):
-        #             skip = True
-        #             break
-
-        #         # 두 벽 모두 수직 혹은 수평일 때, 축 방향 차이가 작으면 too-close
-        #         if is_vertical and abs(p1[0] - q1[0]) < min_clearance:
-        #             # 세로벽끼리 x 차이가 너무 작으면 겹침
-        #             # y구간 겹치는지까지 체크
-        #             if not (p2[1] < q1[1] or p1[1] > q2[1]):
-        #                 skip = True; break
-        #         if not is_vertical and abs(p1[1] - q1[1]) < min_clearance:
-        #             # 가로벽끼리 y 차이가 너무 작으면 겹침
-        #             if not (p2[0] < q1[0] or p1[0] > q2[0]):
-        #                 skip = True; break
-
-        #     if skip:
+        #     wrapped_diff = (mid_angle - gap_angle + math.pi) % (2 * math.pi) - math.pi
+        #     if abs(wrapped_diff) < gap_width / 2:
         #         continue
 
-        #     # 3) 에이전트→goal 직선 경로 상엔 벽 금지 (넓이 ±1m)
-        #     #    -- 간단히 두 점을 잇는 직선 방정식에 벽의 중점이 너무 가까우면 skip
-        #     mid_x = 0.5*(p1[0]+p2[0])
-        #     mid_y = 0.5*(p1[1]+p2[1])
-        #     # 직선: agent_start → goal
-        #     ax, ay = self.uav[0].x, self.uav[0].y
-        #     gx, gy = self.radiation.S_x, self.radiation.S_y
-        #     # 거리 공식
-        #     num   = abs((gy - ay)*mid_x - (gx - ax)*mid_y + gx*ay - gy*ax)
-        #     den   = math.hypot(gy - ay, gx - ax)
-        #     dist  = num/den if den>0 else float('inf')
-        #     if dist < 1.0:
-        #         continue
-
-        #     # 문제 없으면 최종 등록
+        #     p1 = (gx + circle_radius * math.cos(start_angle), gy + circle_radius * math.sin(start_angle))
+        #     p2 = (gx + circle_radius * math.cos(end_angle), gy + circle_radius * math.sin(end_angle))
         #     obstacles.append((p1, p2, wall_thickness))
+        # 근원지를 완전히 둘러싸는 원형 장애물 생성 (구멍 없음)
+        circle_radius = surround_size / 2
+        num_segments = 24  # 원 둘레를 구성할 세그먼트 수 (15도 간격)
+        angle_step = 2 * math.pi / num_segments
+
+        for i in range(num_segments):
+            angle1 = i * angle_step
+            angle2 = (i + 1) * angle_step
+            p1 = (gx + circle_radius * math.cos(angle1),
+                  gy + circle_radius * math.sin(angle1))
+            p2 = (gx + circle_radius * math.cos(angle2),
+                  gy + circle_radius * math.sin(angle2))
+            obstacles.append((p1, p2, wall_thickness))
+
 
         return obstacles
         
@@ -727,16 +615,21 @@ class BaseEnv(gym.Env):
 
         max_dose = self.dose_max
         vis_frac     = 0.5
-        radius_scale = 4.5
-        step         = 1
+        radius_scale = 2.5 # 2.5
+        step         = 0.5   # 1.0
 
         ld_min = math.log10(self.dose_eps + 1)
         ld_max = math.log10(max_dose * vis_frac + 1)
 
         # maze_obstacles = self.generate_maze_obstacles(agent_start=(self.radiation.S_x,self.radiation.S_y))
+        xs = np.arange(0, self.court_lx, step)
+        ys = np.arange(0, self.court_ly, step)
 
-        for xx in range(0, self.court_lx, step):
-            for yy in range(0, self.court_ly, step):
+        for xx in xs:
+            for yy in ys:
+        # for xx in range(0, self.court_lx, step):
+        #     for yy in range(0, self.court_ly, step):
+
                 dose = radiation_field(xx + 0.5, yy + 0.5, self.radiation, self.obstacles)
                 sigma = math.sqrt(self.env_sig**2 + (dose * self.sensor_sig_m)**2)
                 noisy = self.np_random.normal(dose, sigma)

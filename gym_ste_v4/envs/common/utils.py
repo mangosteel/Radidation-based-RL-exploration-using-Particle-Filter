@@ -15,6 +15,27 @@ def line_intersects(x1, y1, x2, y2, x3, y3, x4, y4):
     return (ccw(A, C, D) != ccw(B, C, D)) and (ccw(A, B, C) != ccw(A, B, D))
 
 
+def segment_intersection(p1, p2, q1, q2):
+    """Return intersection point and ratio along p1->p2 segment if it exists."""
+
+    def cross(v1, v2):
+        return v1[0] * v2[1] - v1[1] * v2[0]
+
+    r = (p2[0] - p1[0], p2[1] - p1[1])
+    s = (q2[0] - q1[0], q2[1] - q1[1])
+    denom = cross(r, s)
+    if abs(denom) < 1e-12:
+        return None
+
+    qp = (q1[0] - p1[0], q1[1] - p1[1])
+    t = cross(qp, s) / denom
+    u = cross(qp, r) / denom
+
+    if 0 <= t <= 1 and 0 <= u <= 1:
+        return (p1[0] + t * r[0], p1[1] + t * r[1]), t
+    return None
+
+
 
 
 def radiation_field(x, y, radiation, obstacles=None,visual=True): # 이것을 시각화용 실제 값 전용 두가지 버전을 만들어야 할듯..

@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from scipy.special import gammaln
 
 class ParticleFilter: # 그럼 이 코드를 통해서 정확히 파티클 필터가 어떻게 작동하는지 알 수 있겠군.... 
 
@@ -70,6 +71,19 @@ class ParticleFilter: # 그럼 이 코드를 통해서 정확히 파티클 필�
         dose_rate = self.cs_137_gamma * self.special_activity *  source_mass / (r ** 2) # kBq 단위
                                            
         return dose_rate
+    
+    def _sensor_rate(self, expected_rate):
+        scaled_rate = expected_rate * np.maximum(1.0 + self.sensor_sig_m, 1e-6)
+        return np.maximum(scaled_rate + self.env_sig, 1e-8)
+
+    def _poisson_likelihood(self, observation, rate):
+        safe_rate = np.maximum(rate, 1e-8)
+        log_likelihood = observation * np.log(safe_rate) - safe_rate - gammaln(observation + 1)
+        log_likelihood = np.nan_to_num(log_likelihood, nan=-200, posinf=-200, neginf=-200)
+        likelihood = np.exp(log_likelihood)
+        likelihood[likelihood < 1e-200] = 1e-200
+        return likelihood
+
 
         # 이게 그 각 파티클에 대한 예측 농도값? 인듯.. >> 이거 그냥 방사선 선량률 공식 사용해서 구하면 됨... 거리 제곱에 반비례만 이용!
         # 어차피 이건 파티클에 대한 예측 측정값이라고 생각하면 된다.. 어차피 이거 평균으로 실제 측정값을 구할수 있다. 그리고 우도함수에서도 사용됨(가우시안)
@@ -82,17 +96,16 @@ class ParticleFilter: # 그럼 이 코드를 통해서 정확히 파티클 필�
         # self.wind_s = wind_s # 풍속
 
         pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 파티클에 대한 예측 농도. >> 예측 방사선 선량률..
-        mean_dose_rate = (pf_dose_rate + self.radiation_measure)/2   # 평균농도인데 이걸 어디다 쓸까? 원래 논문에선 예측농도를 그대로 쓰긴했는데 일단 넘기자. / 그대로 차용
-        pdetSig = np.sqrt( pow((mean_dose_rate*self.sensor_sig_m),2) + pow(self.env_sig,2) ) # 센서노이즈와 바람노이즈로 / 그대로 차용
-        #if pdetSig < 1e-100: pdetSig = 1e-100
-        pdetSig[pdetSig < 1e-100] = 1e-100
-        pdetSig_sq = pow(pdetSig, 2) #  아마도 mean_dose_rate , pdesig_sq는 likelihood 의 평균과 분산같다... 이것으로 가중치를 결정!
-        gauss_val = (self.radiation_measure - pf_dose_rate)/pdetSig  # 사실상 측정값이랑 평균 농도만 >> 방사선 선량률로 바꾸면 됨..! 그렇게 까지 많이 바꾸는 거 아님!
-        gauss_new = 1/(math.sqrt(2*math.pi)*pdetSig_sq)*np.exp(-pow(gauss_val,2)/2) # 이건 우도함수의 가우시안 분포? / 가중치를 스무딩할때 사용함!
+
+
         
-        gauss_new[gauss_new != gauss_new] = 1e-200
-        gauss_new[gauss_new < 1e-200] = 1e-200
-        return gauss_new  # 어차피 사실 변수명만 바꾸고 함수 몇개만 바꾸면 원래꺼랑 별차이는 안남 수치를 그대로 들고 오기때문에...
+
+        lambda_rate = self._sensor_rate(pf_dose_rate)
+        poisson_weight = self._poisson_likelihood(self.radiation_measure, lambda_rate)
+
+        poisson_weight[poisson_weight != poisson_weight] = 1e-200
+        poisson_weight[poisson_weight < 1e-200] = 1e-200
+        return poisson_weight  # 어차피 사실 변수명만 바꾸고 함수 몇개만 바꾸면 원래꺼랑 별차이는 안남 수치를 그대로 들고 오기때문에...
 
 
     def _particle_resample(self, gauss_new):
@@ -160,25 +173,21 @@ class ParticleFilter: # 그럼 이 코드를 통해서 정확히 파티클 필�
         Wp_sum = 0
         resample_true = False
 
-        # self.wind_d = wind_d # 바람정보 고려하지않음!
-
-        # #print("PF_wind_d: ", wind_d)
-        # self.wind_s = wind_s # 바람정보 고려하지않음!
-
         self.agent_x = agent_x
         self.agent_y = agent_y
         self.radiation_measure = measure # 근원지에서 측정한 값을 써야되는거 아님?
 
-        pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 평균 가스 농도! >> 예측 방사선 선량률 
-        mean_dose_rate = (pf_dose_rate + self.radiation_measure)/2 # 센서 노이즈 정의하는데 사용
 
-        pdetSig = np.sqrt( pow((mean_dose_rate*self.sensor_sig_m),2) + pow(self.env_sig,2) )
-        #if pdetSig < 1e-100: pdetSig = 1e-100
-        pdetSig[pdetSig < 1e-100] = 1e-100
-        pdetSig_sq = pow(pdetSig, 2)
-        gauss_val = (self.radiation_measure - pf_dose_rate)/pdetSig
-        gauss_new = 1/(math.sqrt(2*math.pi)*pdetSig_sq)*np.exp(-pow(gauss_val,2)/2) # 우도함수 정의.
+        # pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 평균 가스 농도! >> 예측 방사선 선량률 
+        # mean_dose_rate = (pf_dose_rate + self.radiation_measure)/2 # 센서 노이즈 정의하는데 사용
+
+        pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 평균 가스 농도! >> 예측 방사선 선량률
+        lambda_rate = self._sensor_rate(pf_dose_rate)
+        gauss_new = self._poisson_likelihood(self.radiation_measure, lambda_rate)
+        # mean_dose_rate = (pf_dose_rate + self.radiation_measure)/2 # 센서 노이즈 정의하는데 사용
+
         
+
         gauss_new[gauss_new != gauss_new] = 1e-200
         gauss_new[gauss_new < 1e-200] = 1e-200
 
@@ -186,7 +195,12 @@ class ParticleFilter: # 그럼 이 코드를 통해서 정확히 파티클 필�
         if (sort_g[self.pf_num-1] == sort_g[0]): resample_true = True # 가장 큰 값과 작은 값이 동일하다면 이는 모든 값이 같으므로...리샘플링!
         #if (self.update_count == 10): resample_true = True
         Wps = Wpnorms * (gauss_new**(1/num_connected))
-        Wp_sum = np.sum(Wps) 
+        Wp_sum = np.sum(Wps)
+     
+
+        self.pf_x = pf_x # 가중치 업데이트 시 정의된 입력 파티클의 위치 및 방출강도!
+        self.pf_y = pf_y # 근데 이건 초기의 입력값 아닌가? 다시 초기화 되는거 아님? 이것의 의도가 뭘까? / 교수님께 질문해보자...
+       
 
         Wpnorms = Wps/Wp_sum 
 

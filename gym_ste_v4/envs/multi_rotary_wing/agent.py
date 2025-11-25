@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from gym_ste_v4.envs.common.particle_filter import ParticleFilter # 3/19 시작... ok 완료..(action 제어는 제외, kmeans도 gmm이랑 원리는 같아서 제외함.)
-
+from gym_ste_v4.envs.common.utils import segment_intersection
 import warnings
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import KMeans
@@ -32,12 +32,15 @@ class Agent:
         self.sensor_sig_m = env.sensor_sig_m #센서에 의한 노이즈. >> 노이즈 분산을 고정 시킬까? / 너무 깊게 들어가진 말자!
         self.court_lx = env.court_lx # 영역 제한
         self.court_ly = env.court_ly
+        self.env = env
 
         # self.max_q = env.max_q  # 방출강도인데 이건... 방사선의 b=Ax 에서 x에 대응된다. 어차피 A구하는 공식있어서 b는 파티클에서 측정하면 되니깐...
         # self.max_radi_x = env.max_radi_x / 필요없음! 이미 활동도는 고정됨!
 
         self.step_size = env.step_size # 한번에 움직이는 거리
         self.max_step = env.max_step # 최대 스텝수(에피소드 당)
+        self.motion_noise_std = env.motion_noise_std
+
         # self.conc_max = env.conc_max # 가스 농도 최댓값.  >> 선량률 최대값 b 로 수정!
         self.dose_max = env.dose_max   # 새롭게 방사선 선량률 공식으로 정의함(r=0.1)
 
@@ -127,15 +130,20 @@ class Agent:
         env_sig = self.env_sig #1.0 #0.2 #0.4   # 바람 노이즈의 표준편차. # 여기서 true_conc : 방사선 선량률 b 임!(장애물 없다고 가정/ 거리제곱만 고려!)
         sensor_sig_m = self.sensor_sig_m #0.5 #0.1 #0.2 # 센서의 표준편차.
 
-        conc_env = self.np_random.normal(true_conc, env_sig) # 아마도 바람 노이즈와 순수 가스농도를 합친다. 그냥 감마선이 가우시안 분포를 따른다고 하고 이것을 그대로 차용하자!
-        # 그러므로 true_conc를 구하는 함수만 utils 에 만들어놓거나 다른 메서드로 구현해놓으면댐!
-        while conc_env < 0: conc_env =0
-            # conc_env = self.np_random.normal(true_conc, env_sig) #
-        radiation_dose_rate = self.np_random.normal(conc_env, conc_env*sensor_sig_m) # 여기에 센서 노이즈까지 합쳐준다. / 논문에서는 단순한 바람,센서 노이즈분포를 평균농도와 더하는 것으로만 소개함!
-        while radiation_dose_rate < 0: radiation_dose_rate =0
-            #radiation_dose_rate = self.np_random.normal(conc_env, conc_env*sensor_sig_m)
+        # conc_env = self.np_random.normal(true_conc, env_sig) # 아마도 바람 노이즈와 순수 가스농도를 합친다. 그냥 감마선이 가우시안 분포를 따른다고 하고 이것을 그대로 차용하자!
+        # # 그러므로 true_conc를 구하는 함수만 utils 에 만들어놓거나 다른 메서드로 구현해놓으면댐!
+        # while conc_env < 0: conc_env =0
+        #     # conc_env = self.np_random.normal(true_conc, env_sig) #
+        # radiation_dose_rate = self.np_random.normal(conc_env, conc_env*sensor_sig_m) # 여기에 센서 노이즈까지 합쳐준다. / 논문에서는 단순한 바람,센서 노이즈분포를 평균농도와 더하는 것으로만 소개함!
+        # while radiation_dose_rate < 0: radiation_dose_rate =0
+        #     #radiation_dose_rate = self.np_random.normal(conc_env, conc_env*sensor_sig_m)
 
-        return radiation_dose_rate # 최종적인 가스 농도의 분포가 완성된다! / 노이즈가 포함된 센서의 농도 측정값!..
+        conc_env = true_conc + self.np_random.normal(0, env_sig)
+        conc_env = max(conc_env, 0)
+        lam = conc_env * max(1 + sensor_sig_m, 1e-6)
+        lam = max(lam, 1e-8)
+
+        return self.np_random.poisson(lam)  # 최종적인 가스 농도의 분포가 완성된다! / 노이즈가 포함된 센서의 농도 측정값!..
     
     
 
@@ -326,17 +334,35 @@ class Agent:
             self.last_action = disc_action
         else:
             angle = (action_adj) * math.pi
-            self.last_action = action_adj
-        # calculate new agent state
-        self.x = self.x + math.cos(angle) * self.step_size
-        self.y = self.y + math.sin(angle) * self.step_size
+            #self.last_action = action_adj
 
-        # borders
-        if self.x < 0:
-            self.x = 0
-        if self.x > self.court_lx:
-            self.x = self.court_lx
-        if self.y < 0:
-            self.y = 0
-        if self.y > self.court_ly:
-            self.y = self.court_ly
+        # calculate new agent state
+        prev_x, prev_y = self.x, self.y
+        target_x = self.x + math.cos(angle) * self.step_size
+        target_y = self.y + math.sin(angle) * self.step_size
+
+        noisy_x = target_x + self.np_random.normal(0, self.motion_noise_std)
+        noisy_y = target_y + self.np_random.normal(0, self.motion_noise_std)
+
+        noisy_x = min(max(noisy_x, 0), self.court_lx)
+        noisy_y = min(max(noisy_y, 0), self.court_ly)
+
+        closest_point = None
+        closest_t = None
+        for obs in getattr(self.env, "obstacles", []) or []:
+            (ox1, oy1), (ox2, oy2), *_ = obs
+            result = segment_intersection((prev_x, prev_y), (noisy_x, noisy_y), (ox1, oy1), (ox2, oy2))
+            if result:
+                point, t = result
+                if closest_t is None or t < closest_t:
+                    closest_t = t
+                    closest_point = point
+
+        if closest_point is not None:
+            epsilon = 1e-3
+            backoff_t = max(0.0, closest_t - epsilon)
+            noisy_x = prev_x + (noisy_x - prev_x) * backoff_t
+            noisy_y = prev_y + (noisy_y - prev_y) * backoff_t
+
+        self.x = noisy_x
+        self.y = noisy_y
