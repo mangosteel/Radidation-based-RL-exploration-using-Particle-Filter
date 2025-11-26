@@ -24,6 +24,10 @@ from gym import spaces
 
 GPU = True
 device_idx = 0
+
+
+
+
 if GPU:
     device = torch.device("cuda:" + str(device_idx) if torch.cuda.is_available() else "cpu")
 else:
@@ -199,8 +203,8 @@ if __name__ == '__main__':
                 
                 if i_episode% 10 == 1:
                      
-                    env.render(mode='human') # 여기에다 배경까지 추가해봐?
-                    env.render_background_sample(mode='human') # 방사능 모델 시각화..
+                    # env.render(mode='human') # 여기에다 배경까지 추가해봐?
+                    # env.render_background_sample(mode='human') # 방사능 모델 시각화..
                     
                     # env.render_background(mode='human') # 가스모델 시각화..
                     pass

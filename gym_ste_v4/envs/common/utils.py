@@ -108,7 +108,7 @@ def radiation_field(x, y, radiation, obstacles=None,visual=True): # 이것을 �
             # obs 가 2-tuple 이면 thickness=1m, 3-tuple 이면 내부 값 사용
             if len(obs) == 2:
                 (x1, y1), (x2, y2) = obs
-                thickness = 0.04 # 1.0
+                thickness = 0.15 # 1.0 / 15cm 
             elif len(obs) == 3:
                 (x1, y1), (x2, y2), thickness = obs
             else:

@@ -23,6 +23,9 @@ class Agent:
         self.lidar_on = lidar_on
         self.lidar_val = [0] * env.num_beam # base의 observation space정의와 실제로 정의되는 agent사이에 차원이 맞아야 신경망 에러없음!!
 
+        self.counts_per_uSv_per_h = 3.0  # typical GM tube calibration (cps per µSv/h)
+        self.delta_t = env.delta_t
+
         ## True state that agent should know / 결국 baseenv의 상태값을 수정하는 수 밖에...
         # self.gas = env.gas  # 이걸 이제  방사선 클래스로 수정!
 
@@ -94,6 +97,7 @@ class Agent:
             normalized_obs.append((obs[i]-self.obs_low_state[i])/(self.obs_high_state[i] - self.obs_low_state[i]))
         return np.array(normalized_obs) # 내 예상대로 요소별로 각각 정규화를 하는거 같다 / (x-min) / (max-min)
 
+    
 
     def _wind_sensor(self, true_wind_phi, true_wind_speed): # uniform은 균등분포임. 샘플의 추출확률이 동일하다. >> 방사선 모델에서는 바람을 고려하지 않음!
         wind_degree_fluc = 5  #25 #degree / 내생각엔 fluc가 풍향과 풍속의 노이즈가 아닐까 싶다. >> 그럼 굳이 사용할 필요가 있을까? 어차피 환경 노이즈가 있다고 가정하고 퉁치자!
@@ -123,28 +127,78 @@ class Agent:
 
     #     return radiation_dose_rate # 최종적인 가스 농도의 분포가 완성된다! / 노이즈가 포함된 센서의 농도 측정값!..
     
+    def _dose_rate_to_cps(self, dose_rate_nSv):
+        """
+        nSv/h 단위를 받아서 CPS(초당 카운트)로 변환
+        """
+        dose_rate_nSv = max(dose_rate_nSv, 0.0)
+        
+        # 1. nSv/h -> uSv/h 변환 (1 uSv = 1000 nSv)
+        dose_rate_uSv_per_h = dose_rate_nSv / 1000.0
+        
+        # 2. uSv/h -> CPS 변환 (센서 스펙 활용)
+        # self.counts_per_uSv_per_h : 1 uSv/h일 때 나오는 CPS 값 (보통 센서 스펙)
+        expected_cps = dose_rate_uSv_per_h * self.counts_per_uSv_per_h
+        
+        return expected_cps
 
 
+    def _radiation_measure(self, true_conc_nSv): 
+        """
+        true_conc_nSv : 역제곱 법칙으로 구한 이론적 선량률 (단위: nSv/h)
+        """
+        # ---------------------------------------------------------
+        # 1. 환경 노이즈 (Environment Noise) - 바람, 산란 등
+        # ---------------------------------------------------------
+        # true_conc_nSv 자체가 nSv 단위이므로, env_sig도 nSv 단위여야 함
+        env_noise = self.np_random.normal(0, self.env_sig)
+        conc_env_nSv = true_conc_nSv + env_noise
+        conc_env_nSv = max(conc_env_nSv, 0.0) # 음수 방지
 
-    def _radiation_measure(self, true_conc): # true_conc : 논문의 m(p|seta) / 이 값이 아마도 노이즈가 없는 상태에서의 평균 농도를 구한것임! 
-        env_sig = self.env_sig #1.0 #0.2 #0.4   # 바람 노이즈의 표준편차. # 여기서 true_conc : 방사선 선량률 b 임!(장애물 없다고 가정/ 거리제곱만 고려!)
-        sensor_sig_m = self.sensor_sig_m #0.5 #0.1 #0.2 # 센서의 표준편차.
+        # ---------------------------------------------------------
+        # 2. 선량률(nSv/h) -> 람다(Lambda, 기대 총 카운트) 변환
+        # ---------------------------------------------------------
+        expected_cps = self._dose_rate_to_cps(conc_env_nSv)
+        
+        # delta_t 시간 동안 들어올 것으로 기대되는 총 개수
+        lam = expected_cps * self.delta_t
+        
+        # ---------------------------------------------------------
+        # 3. 센서 감도 노이즈 (Gain Noise) - 선택 사항
+        # ---------------------------------------------------------
+        # 센서가 낡아서 감도가 오락가락하는 경우 (Bias가 아니라 Noise로 적용)
+        if self.sensor_sig_m > 0:
+            # 평균 1.0, 표준편차 sensor_sig_m 인 비율을 곱함
+            gain_noise = self.np_random.normal(1.0, self.sensor_sig_m)
+            lam = lam * max(gain_noise, 0.1) # 0 이하 방지
 
-        # conc_env = self.np_random.normal(true_conc, env_sig) # 아마도 바람 노이즈와 순수 가스농도를 합친다. 그냥 감마선이 가우시안 분포를 따른다고 하고 이것을 그대로 차용하자!
-        # # 그러므로 true_conc를 구하는 함수만 utils 에 만들어놓거나 다른 메서드로 구현해놓으면댐!
-        # while conc_env < 0: conc_env =0
-        #     # conc_env = self.np_random.normal(true_conc, env_sig) #
-        # radiation_dose_rate = self.np_random.normal(conc_env, conc_env*sensor_sig_m) # 여기에 센서 노이즈까지 합쳐준다. / 논문에서는 단순한 바람,센서 노이즈분포를 평균농도와 더하는 것으로만 소개함!
-        # while radiation_dose_rate < 0: radiation_dose_rate =0
-        #     #radiation_dose_rate = self.np_random.normal(conc_env, conc_env*sensor_sig_m)
+        lam = max(lam, 1e-8) # 수학적 오류 방지용 최소값
 
-        conc_env = true_conc + self.np_random.normal(0, env_sig)
-        conc_env = max(conc_env, 0)
-        lam = conc_env * max(1 + sensor_sig_m, 1e-6)
-        lam = max(lam, 1e-8)
+        # ---------------------------------------------------------
+        # 4. 포아송 샘플링 (Measurement Step)
+        # ---------------------------------------------------------
+        # measured_count : 실제 센서에 찍힌 '개수(Count)' (정수)
+        measured_count = self.np_random.poisson(lam)
 
-        return self.np_random.poisson(lam)  # 최종적인 가스 농도의 분포가 완성된다! / 노이즈가 포함된 센서의 농도 측정값!..
-    
+        # ---------------------------------------------------------
+        # 5. [중요] Count -> nSv/h 역변환 (Restoration)
+        # ---------------------------------------------------------
+        # 시뮬레이터는 다시 nSv/h 단위를 뱉어줘야 함.
+        
+        # 5-1. Count -> CPS
+        measured_cps = measured_count / self.delta_t
+        
+        # 5-2. CPS -> uSv/h
+        if self.counts_per_uSv_per_h > 0:
+            measured_uSv_h = measured_cps / self.counts_per_uSv_per_h
+        else:
+            measured_uSv_h = 0.0
+            
+        # 5-3. uSv/h -> nSv/h
+        measured_nSv_h = measured_uSv_h * 1000.0
+
+        return measured_nSv_h
+        
     
 
 

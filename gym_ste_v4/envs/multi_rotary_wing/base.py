@@ -51,11 +51,12 @@ class BaseEnv(gym.Env):
         self.normalization = True # 정규화 여부
     
         #---------------------- important settings ---------------------
+        self.test = False
         self.env_sig = 0.2 #  방사선도 바람은 아니지만 공기산란의 영향을 받는다고 보고 그대로 노이즈는 가져가자...            
         self.sensor_sig_m = 0.1 
         self.agent_v = 4                # 2m/s 원래 4인데 2로 줄여봄...
         self.delta_t = 1                # 1sec
-        self.comm_range = 10    # 10m
+        self.comm_range = 10    # 10m 
         self.crash_warning_range = 8
         self.block_on = False
         self.step_size = self.agent_v * self.delta_t # 한번 이동할때 거리...
@@ -65,9 +66,9 @@ class BaseEnv(gym.Env):
         self.success_reward        = +100  # 근원지 찾았을때(거리가 거의0에 가까울때...)
         self.crash_warning_penalty = +0 #-0.1
         self.crash_penalty         = +0 #-100 or 0 for disable
-        self.comm_reward           = +0.1 #+0.01 
+        self.comm_reward           = +0.01 #+0.01 
         self.step_penalty          = -1.0 # 기본적으로 step을 수행할때 음의 보상을 받고 만약 최선의 측정값을 못찾으면 보상이 빠르게 감소함.
-        self.renew_reward          = +0.01 # 새로운 최고 가스 농도(highest conc)를 갱신할 때 부여되는 보상
+        self.renew_reward          = +0.1 # 새로운 최고 가스 농도(highest conc)를 갱신할 때 부여되는 보상
         #--------------------------Common Env----------------------------
         self.debug = False
         self.nearby = None
@@ -268,8 +269,8 @@ class BaseEnv(gym.Env):
         # _, self.dist = self.simulate_lidar(self.uav[0].x,self.uav[0].y, action[0]*math.pi)
         # self.uav[0].lidar_val = self.dist
         
-        x0, y0 = self.uav[0].last_x, self.uav[0].last_y
-        x1, y1 = self.uav[0].x, self.uav[0].y
+        # x0, y0 = self.uav[0].last_x, self.uav[0].last_y
+        # x1, y1 = self.uav[0].x, self.uav[0].y
         
         
         # if min(self.dist) < 0.5 or self.path_intersects_obstacle(x0, y0, x1, y1, self.obstacles):
@@ -352,7 +353,7 @@ class BaseEnv(gym.Env):
         # There are three dones: Converge done, crash_done, timeout_done
         # print("CONV", converge_done, "CRASH", crash_done, "TIMEOUT", timeout_done)
         done = any([converge_done, crash_done,timeout_done])
-        self.uav[0].last_x , self.uav[0].last_y = self.uav[0].x , self.uav[0].y
+        # self.uav[0].last_x , self.uav[0].last_y = self.uav[0].x , self.uav[0].y
         return [global_obs, comm_obs], rews, done, info # 아마 에이전트를 설정할때, 파티클정보야 원래 균일분포로 초기화되는건데...
                                                         # 바람정보나 센서측정값을 기반으로 관측 데이터가 달라질듯?(wegiht_update, gmm 클러스터링...) 
 
@@ -363,6 +364,12 @@ class BaseEnv(gym.Env):
 
         # set initial state randomly
         self._set_init_state() # 아 그러면 env.step시 extreme에서 정의한 최종 환경객체의 set_init_state()가 여기서 발동되는거네...!
+        
+        if self.test:
+            print(self.test)
+            self.radiation.S_x = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 그냥 이렇게 따로 하드코딩 해야될듯? test에서는 따로 업데이트가 안되는듯??
+            self.radiation.S_y = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 이건 테스트 전용! 다행히 잘 찾아감! # 흥미로운 점은 no_pf는 아예 못찾음.. 절반 고정은 잘찾는데...오호.. 
+        
         self.uav = []
         global_obs = []
         radiation_dose_rate = []
@@ -471,7 +478,7 @@ class BaseEnv(gym.Env):
                             wall_length_range=(5, 10),
                             wall_thickness=0.04,
                             min_clearance=0.5,
-                            surround_size=5.0):
+                            surround_size=3.5):
     # """
     # 랜덤한 미로형 장애물 (벽) 생성
     #   - num_walls: 생성할 벽 개수
@@ -623,7 +630,7 @@ class BaseEnv(gym.Env):
 
         max_dose = self.dose_max
         vis_frac     = 0.5
-        radius_scale = 2.5 # 2.5
+        radius_scale = 2.8 # 2.5
         step         = 0.5   # 1.0
 
         ld_min = math.log10(self.dose_eps + 1)
@@ -667,7 +674,7 @@ class BaseEnv(gym.Env):
                 frac = k / num
                 ox = x1 + (x2 - x1) * frac
                 oy = y1 + (y2 - y1) * frac
-                dot = rendering.make_circle(4.5 * size)
+                dot = rendering.make_circle(3.0 * size)
                 dot.set_color(0, 0, 0)
                 dot.add_attr(rendering.Transform(
                     translation=(ox * self.scale, oy * self.scale)
@@ -790,10 +797,10 @@ class BaseEnv(gym.Env):
                     self.viewer.add_onetime(particles_center)
 
 
-            goal = rendering.make_circle(10*size)
+            goal = rendering.make_circle(7*size)
             goal.add_attr(rendering.Transform(translation=(self.radiation.S_x*self.scale,
                                                            self.radiation.S_y*self.scale)))
-            goal.set_color(0, 0, 0)
+            goal.set_color(0.4, 0.6, 0.9)
             self.viewer.add_onetime(goal)
 
             #미로 장애물 렌더링 (generate_maze_obstacles 사용)
@@ -810,7 +817,7 @@ class BaseEnv(gym.Env):
                     frac = k / num
                     ox = x1 + (x2 - x1) * frac
                     oy = y1 + (y2 - y1) * frac
-                    dot = rendering.make_circle(4.5 * size)
+                    dot = rendering.make_circle(3.0 * size)
                     dot.set_color(0, 0, 0)
                     dot.add_attr(rendering.Transform(
                         translation=(ox * self.scale, oy * self.scale)

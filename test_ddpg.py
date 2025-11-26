@@ -8,7 +8,7 @@ import random
 
 import gym
 import numpy as np
-
+from gym_ste_v4.envs.multi_rotary_wing.base import BaseEnv
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -24,6 +24,7 @@ from common.evaluator import *
 import argparse
 from gym import spaces
 
+BaseEnv.test = True
 GPU = True
 device_idx = 0
 if GPU:
