@@ -2,122 +2,131 @@
 # import math
 # from scipy.special import gammaln
 
-# class ParticleFilter: # 그럼 이 코드를 통해서 정확히 파티클 필터가 어떻게 작동하는지 알 수 있겠군.... 
-
-#     def __init__(self, args):  # 여기서  args : agent의 객체임.. 이것의 self를 필터에 대입함.. 그러면 init에 들어감!!
+# class ParticleFilter: 
+#     def __init__(self, args):
 #         self.update_count = -1
-#         self.sensor_sig_m = args.sensor_sig_m # 센서의 노이즈 >> 노이즈는 그대로 가져간다.. 어차피 고정해서 쓸거임!
-# #        print("sig_m: ", self.sensor_sig_m)
-#         self.env_sig = args.env_sig        # 바람에 의한 노이즈
-# #        print("env_sig: ", self.env_sig)
-#         self.pf_num = args.pf_num    # 파티클 개수 
+#         self.sensor_sig_m = args.sensor_sig_m 
+#         self.env_sig = args.env_sig        
+#         self.pf_num = args.pf_num    
 
-#         self.measurement_interval = getattr(args, "delta_t", 1.0) # 이건 추후에 다시 결정..
-#         self.counts_per_uSv_per_h = getattr(args, "counts_per_uSv_per_h", 3.0)
+#         # delta_t: 카운트 계산을 위한 시간 간격
+#         self.measurement_interval = getattr(args, "delta_t", 1.0) 
+#         self.counts_per_uSv_per_h = getattr(args, "counts_per_uSv_per_h", 2.0)
 
-#         self.radiation = args.radiation  # 가스 특성? >> args.radiation 으로 수정할꺼임/ 아마도 근본적으로는 baseenv의 속성값을 수정해야 할것...
-
-#         self.max_cs_137_mass = 9.47 * 10**(-6) # 10^7 nsv/h 를 거리 r=1m로 계산할때 필요한 질량
-#         self.min_cs_137_mass = self.max_cs_137_mass / 2 # 이건 아마 같은거리일때 선량률이 절반인 질량이겠지.. 
-#         self.special_activity = 3.2*10**12 # 반감기 (30.17)년에 따른 specific activity: Bq/g
-#         self.cs_137_gamma = 330/(1000) # kBq에서 10^3만 나눠주자..
-#         self.court_lx = args.court_lx   # 탐색영역?
+#         self.radiation = args.radiation
+        
+#         self.max_cs_137_mass = 9.47 * 10**(-6) 
+#         self.min_cs_137_mass = self.max_cs_137_mass / 2 
+#         self.special_activity = 3.2*10**12 
+#         self.cs_137_gamma = 330/(1000) # 아마도 nSv/h로 나올듯?
+#         self.court_lx = args.court_lx   
 #         self.court_ly = args.court_ly
-
-# #        self.pf_x = np.ones(self.pf_num)*np.nan
-# #        self.pf_y = np.ones(self.pf_num)*np.nan
-# #        self.pf_source_activity = np.ones(self.pf_num)*np.nan
-# #        self.Wpnorms = np.ones(self.pf_num)*np.nan
 
 #         self.np_random = args.np_random 
 
-#         pf_low_state_x = np.zeros(self.pf_num) # particle filter (x1,x2,x3, ...) 파티클 개수만큼 정의됨 / 각 파티클이 source의 후보니깐! 
-#         pf_low_state_y = np.zeros(self.pf_num) # particle filter (y1,y2,y3, ...)
+#         # 파티클 초기화
+#         pf_low_state_x = np.zeros(self.pf_num) 
+#         pf_low_state_y = np.zeros(self.pf_num) 
 #         pf_low_mass = np.ones(self.pf_num) * self.min_cs_137_mass
-#         pf_low_state_wp = np.zeros(self.pf_num) # particle filter (w1,w2,w3, ...)
-
+        
 #         pf_high_state_x = np.ones(self.pf_num)*self.court_lx 
 #         pf_high_state_y = np.ones(self.pf_num)*self.court_ly
-#         pf_high_mass = np.ones(self.pf_num)*self.max_cs_137_mass # 이제는 질량에 노이즈를 줘서 선량률 변화를 이끌어내보자!
+#         pf_high_mass = np.ones(self.pf_num)*self.max_cs_137_mass 
         
-#         pf_high_state_wp = np.ones(self.pf_num)  # 가중치만 0~1로 비율처럼 설정 >> 즉 파티클의 분포로 해석된다
-
-#         self.pf_x = self.np_random.uniform(low = pf_low_state_x, high = pf_high_state_x) # 균등분포로 파티클의 위치와 방출강도를 뽑는다.
+#         self.pf_x = self.np_random.uniform(low = pf_low_state_x, high = pf_high_state_x) 
 #         self.pf_y = self.np_random.uniform(low = pf_low_state_y, high = pf_high_state_y)
-#         self.pf_mass = self.np_random.uniform(low = pf_low_mass, high = pf_high_mass) # 활동도도 분포로 가져가보자!
-#         # self.pf_source_activity = self.np_random.uniform(low = pf_low_state_radi_x, high = pf_high_state_radi_x) # 그냥 q >> radi_x로 !
-#         self.Wpnorms = np.ones(self.pf_num)/self.pf_num # 가중치 정규화하는 과정인듯? 어차피 각 파티클에 곱해져서 sum 하는 거임!
+#         self.pf_mass = self.np_random.uniform(low = pf_low_mass, high = pf_high_mass) 
+        
+#         self.Wpnorms = np.ones(self.pf_num)/self.pf_num 
 
-
-#     def _pf_does_rate(self, agent_x, agent_y, source_x, source_y, source_mass): # 아 실제 근원지가 아니라 pf의 위치구나!
-#         avoid_zero = (np.sqrt(pow(source_x - agent_x,2) + pow(source_y - agent_y,2) ) < 1e-50) # bool
-#         source_x[avoid_zero] += 1e-50 # source는 별게 아니라 pf 를 의미하는 것일것....
-#         source_y[avoid_zero] += 1e-50
-#         # dist = np.sqrt(pow((source_x - agent_x), 2) + pow(source_y - agent_y, 2)) # wind_d : 바람 방향각도
-#         # y_n = -(agent_x - source_x)*math.sin(wind_d)+ \
-#         #        (agent_y - source_y)*math.cos(wind_d)
-#         # lambda_plume = math.sqrt(self.radiation.d * self.radiation.t / (1 + pow(wind_s,2) * self.radiation.t/4/self.radiation.d) ) # radiation.t : tau
-#         # conc_com_1 = source_mass/(4 * math.pi * self.radiation.d * dist)     #             
-#         # conc_com_2 = np.exp( -y_n * wind_s/(2*self.radiation.d) - dist/lambda_plume)
-#         # conc = conc_com_1 * conc_com_2
-#         dx = agent_x - source_x  # raidation.S_x만 env에 따로 정의해놓으면댐 가스께 복붙해서...
+#     def _pf_does_rate(self, agent_x, agent_y, source_x, source_y, source_mass): # 정확한 파티클 측정치 감쇠 로직 구현이 필요!!!
+#         """
+#         벡터화된(Numpy) 파티클 필터용 선량률 계산 함수
+#         source_x, source_y, source_mass는 모두 (pf_num,) 크기의 배열입니다.
+#         """
+#         mu = 124.19 # 감쇠 계수
+        
+#         # 1. 거리 제곱 계산 (r^2)
+#         dx = agent_x - source_x 
 #         dy = agent_y - source_y
-#         r = np.sqrt(dx*dx + dy*dy) # 넘파이는 np.sqrt로 계산 math는 스칼라만 가능!
+#         dist_sq = dx*dx + dy*dy # r은 여기서 거리의 제곱입니다!
+        
+#         # 0으로 나누기 방지 (최소 거리 제곱 1cm^2)
+#         dist_sq = np.maximum(dist_sq, 1e-4) 
     
-#         # To avoid division by zero in case the detection point is extremely close to the source:
-#         # if r < 1e-6:  #넘파이는 if못씀 .. 여러개 있을 때 true,false일수도 있어서 대신 마스킹을 사용함!
-#         #     r = 1e-6
-#         r = np.maximum(r, 1e-6)  # 넘파이에서 안전하게 최소값을 확보하는 방법은 클리핑을 하는것이다. 1e-6 이하면 1e-6으로 아니면 자기값 가짐!
-    
-#         dose_rate = self.cs_137_gamma * self.special_activity *  source_mass / (r ** 2) # kBq 단위
-                                           
+#         # 2. 기본 선량률 계산 (거리 역제곱 법칙)
+#         # 결과값 dose_rate는 파티클 개수만큼의 배열이 됩니다.
+#         dose_rate = self.cs_137_gamma * self.special_activity * source_mass / dist_sq
+        
+#         # 3. 장애물(원형 차폐막) 감쇠 적용 준비
+#         barrier_radius = 1.75
+#         barrier_thickness = 0.15 
+        
+#         # # 비교 기준 거리 설정 (반경 + 두께/2)
+#         # threshold_dist = barrier_radius + barrier_thickness / 2.0   # 생각해보니 어차피 모든 파티클에는 감쇠가 적용되어야 하는데 굳이 조건을 줄필요 없음.. 이렇게 되면 가까운 파티클은 제 값을 받아버림...
+        
+#         # # [중요] r이 '거리 제곱'이므로, 비교할 기준값도 '제곱'해줘야 단위가 맞습니다.
+#         # threshold_sq = threshold_dist ** 2 
+
+#         # 감쇠 계수 계산 (상수)
+#         attenuation_factor = math.exp(-mu * barrier_thickness)
+
+#         # 4. Numpy 마스킹을 이용한 조건부 감쇠 적용
+#         # "거리가 기준보다 먼 경우"에 해당하는 인덱스(True/False)를 찾습니다.
+#         # 즉, 벽을 뚫고 나온 방사선(Inside -> Outside)인 경우입니다.
+#         # mask = dist_sq > threshold_sq 
+        
+#         # mask가 True인 위치의 dose_rate에만 감쇠 계수를 곱합니다.
+#         dose_rate *= attenuation_factor
+        
 #         return dose_rate
     
-#     def _dose_rate_to_cps(self, dose_rate):
-#         dose_rate = np.maximum(dose_rate, 0.0)
-#         dose_rate_uSv_per_h = dose_rate / 1000.0
+#     def _dose_rate_to_cps(self, dose_rate_nSv):
+#         # nSv/h -> uSv/h -> CPS 변환
+#         dose_rate_nSv = np.maximum(dose_rate_nSv, 0.0)
+#         dose_rate_uSv_per_h = dose_rate_nSv / 1000.0
 #         return dose_rate_uSv_per_h * self.counts_per_uSv_per_h
 
-    
-#     def _sensor_rate(self, expected_rate):
-#         expected_counts = self._dose_rate_to_cps(expected_rate) * self.measurement_interval
-#         env_counts = self._dose_rate_to_cps(self.env_sig) * self.measurement_interval
-#         scaled_counts = expected_counts * np.maximum(1.0 + self.sensor_sig_m, 1e-6)
-#         return np.maximum(scaled_counts + env_counts, 1e-8)
+#     def _get_lambda(self, expected_rate_nSv):
+#         # 파티클 예측 선량률 -> 기대 카운트(Lambda)
+#         # 1. 신호 성분
+#         signal_cps = self._dose_rate_to_cps(expected_rate_nSv)
+#         # 2. 배경 성분 (env_sig를 배경잡음 nSv/h로 가정)
+#         bg_cps = self._dose_rate_to_cps(self.env_sig) 
+        
+#         # 총 기대 카운트 (Lambda)
+#         total_lambda = (signal_cps + bg_cps) * self.measurement_interval
+#         return np.maximum(total_lambda, 1e-9) # 로그 계산 오류 방지용 최소값
 
-#     def _poisson_likelihood(self, observation, rate):
-#         safe_rate = np.maximum(rate, 1e-8)
-#         log_likelihood = observation * np.log(safe_rate) - safe_rate - gammaln(observation + 1)
-#         log_likelihood = np.nan_to_num(log_likelihood, nan=-200, posinf=-200, neginf=-200)
+#     def _poisson_likelihood(self, observation_nSv, expected_rate_nSv):
+#         # 1. 실제 관측값(nSv)을 정수형 카운트(k)로 변환
+#         obs_cps = self._dose_rate_to_cps(observation_nSv)
+#         k = int(np.round(obs_cps * self.measurement_interval) )
+        
+#         # 2. 파티클 예측값(nSv)을 Lambda로 변환
+#         lam = self._get_lambda(expected_rate_nSv)
+
+#         # 3. Log-Likelihood 계산: k*ln(lam) - lam - ln(k!)
+#         log_likelihood = k * np.log(lam) - lam - gammaln(k + 1)
+        
+#         # NaN 및 무한대 처리 (매우 중요!)
+#         log_likelihood = np.nan_to_num(log_likelihood, nan=-100.0, posinf=-100.0, neginf=-100.0)
+        
+#         # exp 처리 시 Underflow 방지
 #         likelihood = np.exp(log_likelihood)
-#         likelihood[likelihood < 1e-200] = 1e-200
+#         likelihood = np.nan_to_num(likelihood, nan=1e-30) # NaN 방지
+        
 #         return likelihood
 
-
-#         # 이게 그 각 파티클에 대한 예측 농도값? 인듯.. >> 이거 그냥 방사선 선량률 공식 사용해서 구하면 됨... 거리 제곱에 반비례만 이용!
-#         # 어차피 이건 파티클에 대한 예측 측정값이라고 생각하면 된다.. 어차피 이거 평균으로 실제 측정값을 구할수 있다. 그리고 우도함수에서도 사용됨(가우시안)
-
 #     def _weight_calculate(self, radiation_measure, agent_x, agent_y, pf_x, pf_y, pf_mass):
-#         self.radiation_measure = radiation_measure # 이건 센서 측정 농도값.
-#         self.agent_x = agent_x
-#         self.agent_y = agent_y
-#         # self.wind_d = wind_d # 풍향  / 바람정보 고려안함! 그냥 주석처리만 해놓을꺼임/ 어차피 새로만들꺼라 상관은 없긴해..
-#         # self.wind_s = wind_s # 풍속
-
-#         pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 파티클에 대한 예측 농도. >> 예측 방사선 선량률..
-
-
-        
-
-#         lambda_rate = self._sensor_rate(pf_dose_rate)
-#         poisson_weight = self._poisson_likelihood(self.radiation_measure, lambda_rate)
-
-#         poisson_weight[poisson_weight != poisson_weight] = 1e-200
+#         # 외부에서 호출 시 사용 (구조 유지)
+#         pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 에이전트와 근원지 사이의 측정값...
+#         poisson_weight = self._poisson_likelihood(radiation_measure, pf_dose_rate)
+#         poisson_weight[poisson_weight != poisson_weight] = 1e-200 # nan이 되면 자기자신과 달라짐 그래서 nan방지하는 거임!
 #         poisson_weight[poisson_weight < 1e-200] = 1e-200
-#         return poisson_weight  # 어차피 사실 변수명만 바꾸고 함수 몇개만 바꾸면 원래꺼랑 별차이는 안남 수치를 그대로 들고 오기때문에...
+#         return poisson_weight
 
-
-#     def _particle_resample(self, gauss_new):
+#     def _particle_resample(self, likelihoods):
 #             N = self.pf_num # 파티클 개수
 #             M = N  # 리샘플링후에도 개수는 동일해야함!
 #             indx = np.ones(N)*-1 # 인덱스는 0인 n차원 벡터.
@@ -167,7 +176,7 @@
 
 #                 # 이렇게 노이즈를 첨가한 파티클 샘플을 다시 가중치계산함. 이것들에 대한 우도함수를 재정의함!(리샘플링한 파티클은 또 다시 예측 분포로 봄!)
 #                 n_new = self._weight_calculate(self.radiation_measure, self.agent_x, self.agent_y, nXxp, nXyp, nX_mass_xp)
-#                 alpha = n_new/gauss_new[indx] # 새롭게 정의된 가중치와 이전의 중첩을 포함한 가중치간의 비율..
+#                 alpha = n_new/likelihoods[indx] # 새롭게 정의된 가중치와 이전의 중첩을 포함한 가중치간의 비율..
 #                 mcrand = self.np_random.uniform(0,1,self.pf_num) # 파티클 개수만큼의 0~1의 난수.
 # #                print(alpha > mcrand)
 #                 new_point_bool = alpha > mcrand # 어차피 스무딩 가중치가 이전보다 좋다면 1이 넘을테니 thersold가 충분히 됨!
@@ -175,41 +184,26 @@
 #                 self.pf_y[new_point_bool] = nXyp[new_point_bool]
 #                 self.pf_mass[new_point_bool] = nX_mass_xp[new_point_bool] # 아 애초에 n_new로 pf를 업데이트 시키는구나...
 #             self.Wpnorms = np.ones(self.pf_num)/self.pf_num # 아 그래서 다시 초기화 시키는 건가? 이미 리샘플링 할때 가중치 써먹었으니...
-            
 
-#     def _weight_update(self, measure, agent_x, agent_y, pf_x, pf_y , pf_mass, Wpnorms, num_connected): # 바람정보 고려하지않음!
-#         #self.update_count += 1 # 근데 여기서도 어차피 weight계산을 함...
+#     def _weight_update(self, measure, agent_x, agent_y, pf_x, pf_y , pf_mass, Wpnorms, num_connected):
 #         Wp_sum = 0
 #         resample_true = False
 
+#         self.radiation_measure = measure 
 #         self.agent_x = agent_x
 #         self.agent_y = agent_y
-#         self.radiation_measure = measure # 근원지에서 측정한 값을 써야되는거 아님?
 
+#         # 1. 우도 계산
+#         pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass)
+#         likelihoods = self._poisson_likelihood(self.radiation_measure, pf_dose_rate)
 
-#         # pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 평균 가스 농도! >> 예측 방사선 선량률 
-#         # mean_dose_rate = (pf_dose_rate + self.radiation_measure)/2 # 센서 노이즈 정의하는데 사용
-
-#         pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass) # 평균 가스 농도! >> 예측 방사선 선량률
-#         lambda_rate = self._sensor_rate(pf_dose_rate)
-#         gauss_new = self._poisson_likelihood(self.radiation_measure, lambda_rate)
-#         # mean_dose_rate = (pf_dose_rate + self.radiation_measure)/2 # 센서 노이즈 정의하는데 사용
-
-        
-
-#         gauss_new[gauss_new != gauss_new] = 1e-200
-#         gauss_new[gauss_new < 1e-200] = 1e-200
-
-#         sort_g = np.sort(gauss_new) # ort_g = np.sort(gauss_new)로 우도 값을 정렬하여, 모든 파티클의 우도 값이 동일한지 확인
+#         likelihoods[likelihoods != likelihoods] = 1e-200
+#         likelihoods[likelihoods < 1e-200] = 1e-200
+#         sort_g = np.sort(likelihoods) # ort_g = np.sort(gauss_new)로 우도 값을 정렬하여, 모든 파티클의 우도 값이 동일한지 확인
 #         if (sort_g[self.pf_num-1] == sort_g[0]): resample_true = True # 가장 큰 값과 작은 값이 동일하다면 이는 모든 값이 같으므로...리샘플링!
 #         #if (self.update_count == 10): resample_true = True
-#         Wps = Wpnorms * (gauss_new**(1/num_connected))
-#         Wp_sum = np.sum(Wps)
-     
-
-#         self.pf_x = pf_x # 가중치 업데이트 시 정의된 입력 파티클의 위치 및 방출강도!
-#         self.pf_y = pf_y # 근데 이건 초기의 입력값 아닌가? 다시 초기화 되는거 아님? 이것의 의도가 뭘까? / 교수님께 질문해보자...
-       
+#         Wps = Wpnorms * (likelihoods**(1/num_connected))
+#         Wp_sum = np.sum(Wps) 
 
 #         Wpnorms = Wps/Wp_sum 
 
@@ -223,7 +217,7 @@
 
 #         if 1/sum(pow(Wpnorms,2)) < self.pf_num*0.5 or resample_true: # 1 for every time
 #             self.update_count = 0 # 이건 리샘플링을 했다는 증거이다!
-#             self._particle_resample(gauss_new) # self.pf_x, self.pf_y, self.pf_source_activity, self.Wpnorms이 업데이트...
+#             self._particle_resample(likelihoods) # self.pf_x, self.pf_y, self.pf_source_activity, self.Wpnorms이 업데이트...
 #             #self.CovXxp = np.var(self.pf_x)
 #             #self.CovXyp = np.var(self.pf_y)
 #             #self.CovX_radi_xp = np.var(self.pf_source_activity)
@@ -231,9 +225,8 @@
 
 
 #         return self.pf_x, self.pf_y, self.pf_mass, self.Wpnorms # 
-    
-#     # 3/18 : particle filter 내용분석 완료! 3/19 : Agent 내용 전체 분석목표! / 3/21 : 가스변수 >> 방사능 변수 변환완료 목표!
 
+#수정 ver 
 import numpy as np
 import math
 from scipy.special import gammaln
@@ -241,16 +234,24 @@ from scipy.special import gammaln
 class ParticleFilter: 
     def __init__(self, args):
         self.update_count = -1
+        self.pf_num = args.pf_num
+        
+        # [설정] 환경 및 센서 노이즈 파라미터
         self.sensor_sig_m = args.sensor_sig_m 
         self.env_sig = args.env_sig        
-        self.pf_num = args.pf_num    
 
-        # delta_t: 카운트 계산을 위한 시간 간격
+        # [수정 1] LND 712 센서 스펙 적용 & 시간 간격
         self.measurement_interval = getattr(args, "delta_t", 1.0) 
-        self.counts_per_uSv_per_h = getattr(args, "counts_per_uSv_per_h", 3.0)
+        # LND 712 감도: 약 1.75 CPS per uSv/h (상용 센서 표준)
+        self.counts_per_uSv_per_h = getattr(args, "counts_per_uSv_per_h", 1.75)
+
+        # [수정 2] 수렴 개선을 위한 Temperature 파라미터 (중요!)
+        # 1.0이면 정석 포아송 분포. 값을 키울수록(5~10) 분포가 완만해져서 수렴이 잘 됨.
+        self.likelihood_temperature = 5.0 
 
         self.radiation = args.radiation
         
+        # 물리 상수 및 소스 파라미터
         self.max_cs_137_mass = 9.47 * 10**(-6) 
         self.min_cs_137_mass = self.max_cs_137_mass / 2 
         self.special_activity = 3.2*10**12 
@@ -260,7 +261,7 @@ class ParticleFilter:
 
         self.np_random = args.np_random 
 
-        # 파티클 초기화
+        # 파티클 초기화 (Uniform Distribution)
         pf_low_state_x = np.zeros(self.pf_num) 
         pf_low_state_y = np.zeros(self.pf_num) 
         pf_low_mass = np.ones(self.pf_num) * self.min_cs_137_mass
@@ -275,14 +276,46 @@ class ParticleFilter:
         
         self.Wpnorms = np.ones(self.pf_num)/self.pf_num 
 
-    def _pf_does_rate(self, agent_x, agent_y, source_x, source_y, source_mass): 
-        # 거리 역제곱 법칙 (nSv/h 단위가 나오도록 물리상수 매칭 필요)
+    def _pf_does_rate(self, agent_x, agent_y, source_x, source_y, source_mass): # 정확한 파티클 측정치 감쇠 로직 구현이 필요!!!
+        """
+        벡터화된(Numpy) 파티클 필터용 선량률 계산 함수
+        source_x, source_y, source_mass는 모두 (pf_num,) 크기의 배열입니다.
+        """
+        mu = 12.419 # 감쇠 계수
+        
+        # 1. 거리 제곱 계산 (r^2)
         dx = agent_x - source_x 
         dy = agent_y - source_y
-        r = np.sqrt(dx*dx + dy*dy) 
-        r = np.maximum(r, 0.01) # 0으로 나누기 방지 (최소 거리 1cm)
+        dist_sq = dx*dx + dy*dy # r은 여기서 거리의 제곱입니다!
+        
+        # 0으로 나누기 방지 (최소 거리 제곱 1cm^2)
+        dist_sq = np.maximum(dist_sq, 1e-4) 
     
-        dose_rate = self.cs_137_gamma * self.special_activity * source_mass / (r ** 2)                                   
+        # 2. 기본 선량률 계산 (거리 역제곱 법칙)
+        # 결과값 dose_rate는 파티클 개수만큼의 배열이 됩니다.
+        dose_rate = self.cs_137_gamma * self.special_activity * source_mass / dist_sq
+        
+        # 3. 장애물(원형 차폐막) 감쇠 적용 준비
+        barrier_radius = 1.75
+        barrier_thickness = 0.15 
+        
+        # 비교 기준 거리 설정 (반경 + 두께/2)
+        # threshold_dist = barrier_radius + barrier_thickness / 2.0
+        
+        # # [중요] r이 '거리 제곱'이므로, 비교할 기준값도 '제곱'해줘야 단위가 맞습니다.
+        # threshold_sq = threshold_dist ** 2 
+
+        # 감쇠 계수 계산 (상수)
+        attenuation_factor = math.exp(-mu * barrier_thickness )
+
+        # 4. Numpy 마스킹을 이용한 조건부 감쇠 적용
+        # "거리가 기준보다 먼 경우"에 해당하는 인덱스(True/False)를 찾습니다.
+        # 즉, 벽을 뚫고 나온 방사선(Inside -> Outside)인 경우입니다.
+        #mask = dist_sq > threshold_sq 
+        
+        # mask가 True인 위치의 dose_rate에만 감쇠 계수를 곱합니다.
+        dose_rate *= attenuation_factor
+        
         return dose_rate
     
     def _dose_rate_to_cps(self, dose_rate_nSv):
@@ -293,83 +326,90 @@ class ParticleFilter:
 
     def _get_lambda(self, expected_rate_nSv):
         # 파티클 예측 선량률 -> 기대 카운트(Lambda)
-        # 1. 신호 성분
         signal_cps = self._dose_rate_to_cps(expected_rate_nSv)
-        # 2. 배경 성분 (env_sig를 배경잡음 nSv/h로 가정)
         bg_cps = self._dose_rate_to_cps(self.env_sig) 
         
-        # 총 기대 카운트 (Lambda)
         total_lambda = (signal_cps + bg_cps) * self.measurement_interval
-        return np.maximum(total_lambda, 1e-9) # 로그 계산 오류 방지용 최소값
+        # 로그 계산 오류 방지를 위한 최소값 설정
+        return np.maximum(total_lambda, 1e-9) 
 
     def _poisson_likelihood(self, observation_nSv, expected_rate_nSv):
-        # 1. 실제 관측값(nSv)을 정수형 카운트(k)로 변환
-        obs_cps = self._dose_rate_to_cps(observation_nSv)
-        k = np.round(obs_cps * self.measurement_interval) 
+        # [수정 3] 포아송 우도 함수 개선
         
-        # 2. 파티클 예측값(nSv)을 Lambda로 변환
+        # 1. 실제 관측값(nSv) -> 정수형 카운트(k) (확실한 int 변환)
+        obs_cps = self._dose_rate_to_cps(observation_nSv)
+        k = np.round(obs_cps * self.measurement_interval).astype(int)
+        
+        # 2. 예측값 -> Lambda
         lam = self._get_lambda(expected_rate_nSv)
 
-        # 3. Log-Likelihood 계산: k*ln(lam) - lam - ln(k!)
+        # 3. Log-Likelihood: k*ln(lam) - lam - ln(k!)
         log_likelihood = k * np.log(lam) - lam - gammaln(k + 1)
         
-        # NaN 및 무한대 처리 (매우 중요!)
-        log_likelihood = np.nan_to_num(log_likelihood, nan=-100.0, posinf=-100.0, neginf=-100.0)
+        # [중요] Temperature 적용 (분포 물타기)
+        log_likelihood = log_likelihood / self.likelihood_temperature
         
-        # exp 처리 시 Underflow 방지
+        # 4. 수치 안정성 처리 (NaN, Inf 방지)
+        log_likelihood = np.nan_to_num(log_likelihood, nan=-1000.0, neginf=-1000.0)
+        
+        # 5. exp 변환 및 Underflow 방지
         likelihood = np.exp(log_likelihood)
-        likelihood = np.nan_to_num(likelihood, nan=1e-30) # NaN 방지
+        likelihood = np.maximum(likelihood, 1e-100) # 0이 되는 것 방지
         
         return likelihood
 
+    def _particle_resample(self, likelihoods):
+        """
+        [수정 4] MCMC 제거 -> Systematic Resampling + Roughening (Jittering)
+        포아송 모델처럼 뾰족한 분포에서는 이 방식이 훨씬 강건합니다.
+        """
+        N = self.pf_num
+        
+        # 1. Systematic Resampling (기존 로직 유지)
+        indx = np.zeros(N, dtype=int)
+        Q = np.cumsum(self.Wpnorms)
+        T = np.arange(N)/N + self.np_random.uniform(0, 1/N, N)
+        
+        i, j = 0, 0
+        while i < N and j < N:
+            while Q[j] < T[i]:
+                j += 1
+            if j >= N: break # 인덱스 초과 방지
+            indx[i] = j
+            i += 1
+            
+        # 선택된 우수 파티클 추출
+        keep_x = self.pf_x[indx]
+        keep_y = self.pf_y[indx]
+        keep_mass = self.pf_mass[indx]
+        
+        # 2. Roughening (파티클 뭉침 방지 - 강제 노이즈 주입)
+        # 튜닝 파라미터 K: 전체 맵 크기의 2% 정도 흔들어줌 (수렴 속도 조절)
+        K = 0.02 
+        
+        # 위치 노이즈
+        jitter_x = K * self.court_lx * self.np_random.normal(0, 1, N)
+        jitter_y = K * self.court_ly * self.np_random.normal(0, 1, N)
+        
+        # 질량 노이즈
+        mass_range = self.max_cs_137_mass - self.min_cs_137_mass
+        jitter_mass = K * mass_range * self.np_random.normal(0, 1, N)
+
+        # 3. 파티클 업데이트 및 경계값 처리 (Clip)
+        self.pf_x = np.clip(keep_x + jitter_x, 0, self.court_lx)
+        self.pf_y = np.clip(keep_y + jitter_y, 0, self.court_ly)
+        self.pf_mass = np.clip(keep_mass + jitter_mass, self.min_cs_137_mass, self.max_cs_137_mass)
+
+        # 4. 가중치 초기화 (1/N)
+        self.Wpnorms = np.ones(N) / N
+
     def _weight_calculate(self, radiation_measure, agent_x, agent_y, pf_x, pf_y, pf_mass):
-        # 외부에서 호출 시 사용 (구조 유지)
+        # 외부 호출용 (구조 유지)
         pf_dose_rate = self._pf_does_rate(agent_x, agent_y, pf_x, pf_y, pf_mass)
         poisson_weight = self._poisson_likelihood(radiation_measure, pf_dose_rate)
         return poisson_weight
 
-    def _particle_resample(self, likelihoods):
-        # Systematic Resampling (기존 로직 유지하되 안전성 보강)
-        N = self.pf_num 
-        Q = np.cumsum(self.Wpnorms)
-        indx = np.zeros(N, dtype=np.int64)
-        T = np.arange(N)/N + self.np_random.uniform(0,1/N, N)
-        
-        i=0
-        j=0
-        while(i<N and j<N): # 인덱스 초과 방지
-            while(j < N-1 and Q[j] < T[i]): 
-                j = j+1 
-            indx[i]=j 
-            i=i+1
-        
-        self.pf_x = self.pf_x[indx]
-        self.pf_y = self.pf_y[indx]
-        self.pf_mass = self.pf_mass[indx]
-
-        # Regularized Particle Filter (Jittering) - 파티클 다양성 확보
-        # 분산이 너무 작으면 최소 노이즈 추가
-        var_x = np.maximum(np.var(self.pf_x), 1e-4)
-        var_y = np.maximum(np.var(self.pf_y), 1e-4)
-        var_m = np.maximum(np.var(self.pf_mass), 1e-20)
-        
-        hopt = (4/(N+2))**(1/(2+4)) # Bandwidth (Simple assumption)
-        
-        # 위치 노이즈 추가
-        self.pf_x += hopt * np.sqrt(var_x) * self.np_random.normal(0, 1, N)
-        self.pf_y += hopt * np.sqrt(var_y) * self.np_random.normal(0, 1, N)
-        self.pf_mass += hopt * np.sqrt(var_m) * self.np_random.normal(0, 1, N)
-
-        # 맵 밖으로 나간 파티클 클리핑 (Clipping)
-        self.pf_x = np.clip(self.pf_x, 0, self.court_lx)
-        self.pf_y = np.clip(self.pf_y, 0, self.court_ly)
-        self.pf_mass = np.maximum(self.pf_mass, 0) # 질량은 음수 불가
-
-        # 리샘플링 후 가중치 초기화
-        self.Wpnorms = np.ones(self.pf_num)/self.pf_num
-
     def _weight_update(self, measure, agent_x, agent_y, pf_x, pf_y , pf_mass, Wpnorms, num_connected):
-        
         self.radiation_measure = measure 
         self.agent_x = agent_x
         self.agent_y = agent_y
@@ -379,49 +419,32 @@ class ParticleFilter:
         likelihoods = self._poisson_likelihood(self.radiation_measure, pf_dose_rate)
 
         # 2. 가중치 업데이트
-        Wps = Wpnorms * likelihoods
+        # (num_connected는 보통 1을 사용하나, 기존 로직 존중)
+        Wps = Wpnorms * (likelihoods**(1/num_connected))
+        
+        # NaN 방지 및 정규화
         Wp_sum = np.sum(Wps)
-        
-        # [핵심 수정] NaN / 0 방어 코드
-        # 모든 파티클의 확률이 0이 되어버린 경우 (Weight Collapse)
-        if Wp_sum <= 1e-30 or np.isnan(Wp_sum):
-            # 비상 대책: 가중치를 균등하게 리셋하고, 리샘플링을 강제함
-            Wps = np.ones(self.pf_num) / self.pf_num
-            Wp_sum = 1.0
-            # (선택) 여기서 파티클을 맵 전체에 다시 뿌려주는 것이 좋을 수도 있음
-            # 하지만 최소한 프로그램이 죽지는 않게 함
-        
-        # 정규화 (Normalize)
-        Wpnorms = Wps / Wp_sum
-        
-        # 혹시라도 남았을 NaN 제거
-        Wpnorms = np.nan_to_num(Wpnorms, nan=1.0/self.pf_num)
-        
-        # 상태 저장
+        if Wp_sum == 0 or np.isnan(Wp_sum):
+            # 모든 파티클이 죽은 경우 -> 랜덤 리셋 or 균등 분배
+            Wpnorms = np.ones(self.pf_num) / self.pf_num
+            resample_true = True
+        else:
+            Wpnorms = Wps / Wp_sum
+            
+            # 유효 파티클 개수(N_eff) 계산
+            n_eff = 1.0 / np.sum(Wpnorms**2)
+            # 파티클 절반 이하만 유효하면 리샘플링
+            resample_true = n_eff < (self.pf_num * 0.5)
+
         self.pf_x = pf_x
         self.pf_y = pf_y
-        self.pf_mass = pf_mass 
         self.Wpnorms = Wpnorms
-
         self.update_count += 1
-        
-        # 리샘플링 조건 체크 (ESS)
-        ess = 1.0 / np.sum(Wpnorms**2)
-        if ess < self.pf_num * 0.5:
-            self.update_count = 0
-            self._particle_resample(likelihoods) # 인자 전달
-        
-        return self.pf_x, self.pf_y, self.pf_mass, self.Wpnorms
-    
-    # [추가] State 생성 시 NaN 방지를 위해 이 함수를 통해 값을 가져오세요
-    def get_estimated_source(self):
-        est_x = np.sum(self.pf_x * self.Wpnorms)
-        est_y = np.sum(self.pf_y * self.Wpnorms)
-        est_mass = np.sum(self.pf_mass * self.Wpnorms)
-        
-        # 만약 계산 결과가 NaN이면 맵 중앙값 리턴
-        if np.isnan(est_x) or np.isnan(est_y):
-            return self.court_lx/2, self.court_ly/2, self.min_cs_137_mass
-            
-        return est_x, est_y, est_mass
 
+        # 3. 리샘플링 실행
+        # (혹은 일정 주기마다 강제 리샘플링)
+        if resample_true: 
+            self.update_count = 0
+            self._particle_resample(likelihoods) 
+
+        return self.pf_x, self.pf_y, self.pf_mass, self.Wpnorms

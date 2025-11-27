@@ -65,63 +65,81 @@ def _detect_circular_barrier(obstacles, source_x, source_y, radius_tolerance_rat
     return radius_mean, thickness_mean
 
 
-def radiation_field(x, y, radiation, obstacles=None,visual=True): # 이것을 시각화용 실제 값 전용 두가지 버전을 만들어야 할듯..
-    """
-    방사능 선량률 계산 (거리 기반 + 장애물 감쇠 반영)
+# def radiation_field(x, y, radiation, obstacles=None, visual=True):
+#     """
+#     방사능 선량률 계산 (원형 차폐막 단순화 버전)
+#     - 근원지를 감싸는 원형 벽이 있다고 가정하고,
+#     - 거리가 (반경 + 두께)를 넘어가면 무조건 차폐 감쇠를 적용합니다.
+#     """
+#     # 1. 감쇠 계수 설정 (Visual용과 Simulation용 구분)
+#     if visual:
+#         mu = 12.419 # 시각화용 (적당한 감쇠)
+#     else:
+#         mu = 124.19 # 실제 납/콘크리트 등 (강한 감쇠)
 
-    Parameters
-    ----------
-    x, y : float
-        측정 위치 (m 단위)
-    radiation : Radiation
-        S_x, S_y, cs_137_gamma, S_mass, special_activity 보유 객체
-    obstacles : list of ((x1,y1),(x2,y2)) or ((x1,y1),(x2,y2),thickness)
-        장애물 직선의 양 끝점 (and Optional: 두께[m])
-    mu : float
-        감쇠 계수 [m⁻¹] (납벽: 1.2419 cm⁻¹ = 124.19 m⁻¹)
+#     # 2. 거리 계산
+#     dx = x - radiation.S_x
+#     dy = y - radiation.S_y
+#     r = math.hypot(dx, dy)
+#     r = max(r, 1e-6) # 0 나누기 방지
+
+#     # 3. 기본 선량률 (Distance Inverse Square Law)
+#     # Dose = Gamma * Mass * Activity / r^2
+#     dose = radiation.cs_137_gamma * radiation.S_mass * radiation.special_activity / (r**2)
+
+#     # 4. 장애물(원형 차폐막) 감쇠 적용
+#     # 시나리오: 근원지 주변에 반경 1.75m, 두께 0.15m의 벽이 있음
+#     barrier_radius = 1.75  # surround_size(3.5) / 2
+#     barrier_thickness = 0.15 
+
+#     # 거리가 (반경 + 두께)보다 크다면, 벽을 통과한 것으로 간주
+#     if r > (barrier_radius + barrier_thickness/2):
+#         attenuation = math.exp(-mu * barrier_thickness/2)
+#         dose *= attenuation
+    
+#     # (옵션) 만약 센서가 벽 내부(두께 사이)에 묻혀있는 경우를 정교하게 하려면 
+#     # r > barrier_radius 일 때 거리에 비례해 감쇠를 줄 수도 있지만,
+#     # 여기서는 단순하게 "벽 밖으로 나가면 감쇠"로 처리했습니다.
+
+#     return dose
+
+def radiation_field(x, y, radiation, obstacles=None, visual=True):
     """
+    방사능 선량률 계산 (원형 차폐막 단순화 버전)
+    - 근원지를 감싸는 원형 벽이 있다고 가정하고,
+    - 거리가 (반경 + 두께)를 넘어가면 무조건 차폐 감쇠를 적용합니다.
+    """
+    # 1. 감쇠 계수 설정 (Visual용과 Simulation용 구분)
     if visual:
-        mu=12.419
+        mu = 12.419 # 시각화용 (적당한 감쇠)
     else:
-        mu = 124.19
-    # 1) 기본 dose (거리 기반)
+        mu = 12.419 # 실제 납/콘크리트 등 (강한 감쇠) 너무 감쇠가 강해서 그런거 같다... 10배 낮춰보니깐 그래도 그렇지 헤메지는 않음.. 가벼운 콘크리트 / 벽돌 (Light Concrete / Brick) 13~15정도라네... ㅇㅇ
+
+    # 2. 거리 계산
     dx = x - radiation.S_x
     dy = y - radiation.S_y
     r = math.hypot(dx, dy)
-    r = max(r, 1e-6)
+    r = max(r, 1e-6) # 0 나누기 방지
+
+    # 3. 기본 선량률 (Distance Inverse Square Law)
+    # Dose = Gamma * Mass * Activity / r^2
     dose = radiation.cs_137_gamma * radiation.S_mass * radiation.special_activity / (r**2)
 
-    # 2) 장애물 감쇠 ∏ e^(–μ · d_t)
-    if obstacles:
-        attenuation = 1.0
-        # for obs in obstacles:
-        # 원형 장애물이 존재하면 방향에 무관한 균일 감쇠만 적용
-        circular_barrier = _detect_circular_barrier(obstacles, radiation.S_x, radiation.S_y)
-        non_circular_obstacles = [] if circular_barrier else obstacles
+    # 4. 장애물(원형 차폐막) 감쇠 적용
+    # 시나리오: 근원지 주변에 반경 1.75m, 두께 0.15m의 벽이 있음
+    barrier_radius = 1.75  # surround_size(3.5) / 2
+    barrier_thickness = 0.15 
 
-        if circular_barrier:
-            barrier_radius, barrier_thickness = circular_barrier
-            if r > barrier_radius:
-                attenuation *= math.exp(-mu * barrier_thickness)
-
-        for obs in non_circular_obstacles:
-            # obs 가 2-tuple 이면 thickness=1m, 3-tuple 이면 내부 값 사용
-            if len(obs) == 2:
-                (x1, y1), (x2, y2) = obs
-                thickness = 0.15 # 1.0 / 15cm 
-            elif len(obs) == 3:
-                (x1, y1), (x2, y2), thickness = obs
-            else:
-                continue
-
-            # 소스-측정 지점 선분이 벽 선분과 교차하면 attenuation 적용
-            if line_intersects(x1, y1, x2, y2,
-                               radiation.S_x, radiation.S_y, x, y):
-                attenuation *= math.exp(-mu * thickness)
-        dose *= attenuation
+    # 거리가 (반경 + 두께)보다 크다면, 벽을 통과한 것으로 간주
+    # if r > (barrier_radius + barrier_thickness/2):
+    attenuation = math.exp(-mu * barrier_thickness)
+    dose *= attenuation
+    
+    # (옵션) 만약 센서가 벽 내부(두께 사이)에 묻혀있는 경우를 정교하게 하려면 
+    # r > barrier_radius 일 때 거리에 비례해 감쇠를 줄 수도 있지만,
+    # 여기서는 단순하게 "벽 밖으로 나가면 감쇠"로 처리했습니다.
 
     return dose
-
 
 def radiation_field_for_render(x, y, raidation): # 방사능 농도  / 어차피 radiation에 방사선 객체가 들어감!
     q= 2000

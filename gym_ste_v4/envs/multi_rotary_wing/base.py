@@ -318,7 +318,7 @@ class BaseEnv(gym.Env):
         
         if min_conv < self.conv_eps: # 이것이 실행된다는 건 일단 true인 상태...
             pf_center = self.uav[min_conv_indx].pf_center # 어차피 에이전트 1개면 argmin이 의미없긴함..
-            self.nearby = d_btw_points(pf_center, [self.radiation.S_x, self.radiation.S_y]) # 그냥 에이전트와 소스간의 거리구하는 거임!
+            self.nearby = d_btw_points(pf_center, [self.radiation.S_x, self.radiation.S_y]) 
             
             if self.nearby < self.eps: # 거리가 임계치보다 작으면, 보상값 100을 받는다.
                 rews[group == group[min_conv_indx]] = self.success_reward * sum(group == group[min_conv_indx])/self.num_agents
@@ -476,7 +476,7 @@ class BaseEnv(gym.Env):
     def generate_maze_obstacles(self,agent_start,
                             num_walls=20,
                             wall_length_range=(5, 10),
-                            wall_thickness=0.04,
+                            wall_thickness=0.15, # 수정 0.04에서 0.15로 크게 영향은 없을듯?
                             min_clearance=0.5,
                             surround_size=3.5):
     # """
