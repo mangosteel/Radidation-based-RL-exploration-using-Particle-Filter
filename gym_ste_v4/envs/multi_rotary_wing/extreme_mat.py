@@ -17,7 +17,7 @@ class MultiRotaryExtMatEnv(BaseEnv):
     def __init__(self):
         BaseEnv.__init__(self)
 
-        mat_file = scipy.io.loadmat('/home/shark/Pictures/MVG_DDPG-main_radiation/MVG_DDPG-main_radiation/gym_ste_v4/envs/common/mat_files/random_states_rate.mat')
+        mat_file = scipy.io.loadmat('/home/shark/Pictures/MVG_SAC-main_radiation_masss/MVG_SAC-main_radiation_block_simple/MVG_SAC-main_radiation_poisson/gym_ste_v4/envs/common/mat_files/random_states_rate.mat')
         #self.agent_x_list = mat_file['agent_x_rate']*self.court_lx
         #self.agent_y_list = mat_file['agent_y_rate']*self.court_ly
         self.goal_x_list = mat_file['goal_x_rate']*self.court_lx #goal_rate is already set between 0.2 and 0.8 by matlab

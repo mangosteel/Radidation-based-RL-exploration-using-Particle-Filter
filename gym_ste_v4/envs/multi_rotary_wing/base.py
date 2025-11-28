@@ -51,7 +51,7 @@ class BaseEnv(gym.Env):
         self.normalization = True # 정규화 여부
     
         #---------------------- important settings ---------------------
-        self.test = False
+        
         self.env_sig = 0.2 #  방사선도 바람은 아니지만 공기산란의 영향을 받는다고 보고 그대로 노이즈는 가져가자...            
         self.sensor_sig_m = 0.1 
         self.agent_v = 4                # 2m/s 원래 4인데 2로 줄여봄...
@@ -152,7 +152,7 @@ class BaseEnv(gym.Env):
         #----------------------- Random seed --------------------------
         self.seed_num = self.seed(seed)  # 
         print("Seed: ", self.seed_num)
-
+        self.test = False
         #--------------------- user parameter number ---------------------------
         self.pf_num = pf_num # now set the same number of particle filter for all agents
         self.gmm_num = gmm_num
@@ -365,10 +365,9 @@ class BaseEnv(gym.Env):
         # set initial state randomly
         self._set_init_state() # 아 그러면 env.step시 extreme에서 정의한 최종 환경객체의 set_init_state()가 여기서 발동되는거네...!
         
-        if self.test:
-            print(self.test)
-            self.radiation.S_x = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 그냥 이렇게 따로 하드코딩 해야될듯? test에서는 따로 업데이트가 안되는듯??
-            self.radiation.S_y = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 이건 테스트 전용! 다행히 잘 찾아감! # 흥미로운 점은 no_pf는 아예 못찾음.. 절반 고정은 잘찾는데...오호.. 
+        
+        #self.radiation.S_x = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 그냥 이렇게 따로 하드코딩 해야될듯? test에서는 따로 업데이트가 안되는듯??
+        #self.radiation.S_y = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 이건 테스트 전용! 다행히 잘 찾아감! # 흥미로운 점은 no_pf는 아예 못찾음.. 절반 고정은 잘찾는데...오호.. 
         
         self.uav = []
         global_obs = []

@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     #etc
     parser.add_argument('--pause_time', default=0, type=float, help='Pause time for evaluation')
-    parser.add_argument('--model_path', default='model/low_noise_current/gym_ste_v4:MultiRotaryExtEnv-v0-run10/', type=str, help='Output root')
+    parser.add_argument('--model_path', default='model/low_noise_current/gym_ste_v4:MultiRotaryExtEnv-v0-run51/', type=str, help='Output root')
     parser.add_argument('--model_path_current', default='.', type=str, help='Output root')
 
     #CUDA GPU
@@ -75,7 +75,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     env = gym.make(args.env)
-    env.init_envs(seed=8201085478471, adj_act_on=False, pf_num=2000,crash_check_on=False, mean_on=True, gmm_num=3, kmeans_num=0, num_agents=1)
+    
+    env.init_envs(seed=8201085478471, adj_act_on=False, pf_num=2000,crash_check_on=False, mean_on=True, gmm_num=3, kmeans_num=0, num_agents=1,lidar_on = False)
 
     action_space = env.action_space
     state_space  = env.observation_space
@@ -109,7 +110,7 @@ if __name__ == '__main__':
             env.close()
             [global_state, comm_state] = env.reset()
             #state = comm_state[0]
-            #env.render_background(mode='human') #Draw background plot
+            #env.render_background_sample(mode='human') #Draw background plot
             episode_steps = 0
             episode_reward = 0.
             sim_time = []
@@ -128,7 +129,7 @@ if __name__ == '__main__':
                 comm_state = comm_next_state
 
                 if steps >= max_steps: done = True
-                # env.render(mode='human') #Draw simulation
+                #env.render(mode='human') #Draw simulation
                 sim_time_temp = time.time()-start
                 sim_time.append(sim_time_temp)
                 # update
