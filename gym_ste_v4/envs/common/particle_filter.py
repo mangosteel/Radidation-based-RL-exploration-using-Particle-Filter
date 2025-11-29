@@ -227,7 +227,7 @@
 #         return self.pf_x, self.pf_y, self.pf_mass, self.Wpnorms # 
 
 
-mode = 0 # 0 : 파라미터 k 고정  /  1: k 적응형 ....  11/28 기준 적응형이 run53 / 기존 모드가 run54 .. 검증성능으로 판단하자 일단 ㅇㅇ
+mode = 1 # 0 : 파라미터 k 고정  /  1: k 적응형 ....  11/28 기준 적응형이 run53 / 기존 모드가 run54 .. 검증성능으로 판단하자 일단 ㅇㅇ >> 모드 1(적응형)이 kick임!!! >이걸로 간다! run59
 
 # 일단 이걸로 학습시킨 후 temperature = 2.5 / k = * 0.09로 해서 검증함.. >> 아래의 적응형 코드의 성능이 별로라면 이걸로 학습을 진행하는걸로...
 if mode == 0:
@@ -244,7 +244,7 @@ if mode == 0:
             # [설정] 훈련/테스트 모드 구분 (args에 없으면 기본값 False)
             #self.is_test_mode = getattr(args, "test", False) or getattr(args, "test_mode", False)
 
-            self.is_test_mode = False # 검증시에만 켜두고 평소에는 false
+            self.is_test_mode = True # 검증시에만 켜두고 평소에는 false
 
             # [설정] 환경 및 센서 노이즈 파라미터
             self.sensor_sig_m = args.sensor_sig_m 
@@ -384,7 +384,7 @@ if mode == 0:
             
             # Test 모드에서는 마지막 수렴을 위해 노이즈를 더 줄임 (선택 사항)
             if self.is_test_mode:
-                K *= 0.09 # 절반으로 더 줄임
+                K *= 0.09 #  0.09 >> 0.2
 
             # 3. Roughening (Noise Injection)
             jitter_x = K * self.court_lx * self.np_random.normal(0, 1, N)
@@ -471,7 +471,7 @@ elif mode ==1:
             # 훈련 시: 15.0 (파티클 생존 우선 -> RL 학습 안정성 확보)
             # 테스트 시: 2.5 (정밀도 우선 -> 정확한 위치 추정)
             if self.is_test_mode:
-                self.likelihood_temperature = 2.5
+                self.likelihood_temperature = 5.0 # 2.5 >> 5.0
             else:
                 self.likelihood_temperature = 5.0 
 
@@ -583,7 +583,7 @@ elif mode ==1:
             keep_mass = self.pf_mass[indx]
             
             # 2. Adaptive K 값 계산 (핵심!)
-            # 파티클들의 현재 퍼짐 정도(Standard Deviation) 계산
+            # 파티클들의 현재 퍼짐 정도(Standard Deviation) 계산   / 근데 0과 무슨 차이가 있지?
             std_x = np.std(self.pf_x)
             std_y = np.std(self.pf_y)
             avg_std = (std_x + std_y) / 2.0
@@ -598,7 +598,7 @@ elif mode ==1:
             
             # 테스트 모드라면 더더욱 정밀하게(절반으로 줄임)
             if self.is_test_mode:
-                K *= 0.09 
+                K *= 0.2 # 0.09 >>0.2 
 
             # 3. Roughening (Noise Injection)
             jitter_x = K * self.court_lx * self.np_random.normal(0, 1, N)

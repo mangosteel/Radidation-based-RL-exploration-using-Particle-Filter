@@ -366,8 +366,8 @@ class BaseEnv(gym.Env):
         self._set_init_state() # 아 그러면 env.step시 extreme에서 정의한 최종 환경객체의 set_init_state()가 여기서 발동되는거네...!
         
         
-        #self.radiation.S_x = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 그냥 이렇게 따로 하드코딩 해야될듯? test에서는 따로 업데이트가 안되는듯??
-        #self.radiation.S_y = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  # 이건 테스트 전용! 다행히 잘 찾아감! # 흥미로운 점은 no_pf는 아예 못찾음.. 절반 고정은 잘찾는데...오호.. 
+        #self.radiation.S_x = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  
+        #self.radiation.S_y = self.np_random.uniform(low=self.court_lx*0.85, high=self.court_lx*0.95)  
         
         self.uav = []
         global_obs = []

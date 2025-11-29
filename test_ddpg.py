@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     #etc
     parser.add_argument('--pause_time', default=0, type=float, help='Pause time for evaluation')
-    parser.add_argument('--model_path', default='model/low_noise_current/gym_ste_v4:MultiRotaryExtEnv-v0-run51/', type=str, help='Output root')
+    parser.add_argument('--model_path', default='model/low_noise_current/gym_ste_v4:MultiRotaryExtEnv-v0-run59/', type=str, help='Output root')
     parser.add_argument('--model_path_current', default='.', type=str, help='Output root')
 
     #CUDA GPU
