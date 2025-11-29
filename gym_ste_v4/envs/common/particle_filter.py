@@ -244,7 +244,7 @@ if mode == 0:
             # [설정] 훈련/테스트 모드 구분 (args에 없으면 기본값 False)
             #self.is_test_mode = getattr(args, "test", False) or getattr(args, "test_mode", False)
 
-            self.is_test_mode = True # 검증시에만 켜두고 평소에는 false
+            self.is_test_mode = False # 검증시에만 켜두고 평소에는 false
 
             # [설정] 환경 및 센서 노이즈 파라미터
             self.sensor_sig_m = args.sensor_sig_m 
@@ -260,7 +260,7 @@ if mode == 0:
             if self.is_test_mode:
                 self.likelihood_temperature = 2.5  # 진짜 이거 때문에 파티클들이 과도하게 흩어져서 문제가 된듯... 수정된 파티클 필터 로직에 대해 공부하고 temperature 와 k에 대한 공부도 하자...
             else:
-                self.likelihood_temperature = 15.0 
+                self.likelihood_temperature = 5.0  # 15 >> 5 원래도 5인듯? 일단 성능 보자.. 그럼만약 진짜 이것때문에 리워드 커브의 경향이 달라지는 거라면 적응형도 5로 맞춰놓고 해볼필요 있음.. 일단 보자.. 맞는거 같음!!
 
             self.radiation = args.radiation
             
@@ -296,7 +296,7 @@ if mode == 0:
             # [중요] 훈련/테스트 환경의 물리 상수 일치 (둘 다 12.0)
             # 만약 Test 코드에서 mu=124.19를 쓴다면 여기서 분기 처리 필요하지만,
             # 일반적으로는 물리 환경은 동일해야 함.
-            mu = 12.0 
+            mu = 12.419 
             
             # 1. 거리 제곱 계산
             dx = agent_x - source_x 
@@ -473,7 +473,7 @@ elif mode ==1:
             if self.is_test_mode:
                 self.likelihood_temperature = 2.5
             else:
-                self.likelihood_temperature = 15.0 
+                self.likelihood_temperature = 5.0 
 
             self.radiation = args.radiation
             
@@ -656,3 +656,6 @@ elif mode ==1:
                 self._particle_resample(likelihoods) 
 
             return self.pf_x, self.pf_y, self.pf_mass, self.Wpnorms
+        
+elif mode==2:
+    pass
